@@ -40,3 +40,17 @@ Each package lives in a sibling Git repository. Source is under the underscore
 package, tests under tests/, packaging at the root. No compatibility source
 paths remain. Applications persist sparse supported config dictionaries and
 construct providers before injecting them into Core.
+
+Core's `squid_core/hooks/` contains only lifecycle contexts, `HookResponse`,
+`PromptContextBlock`, `HookRunner`, and metadata/discovery/loading. The host
+supplies hook objects; Core invokes their callbacks and applies only the effects
+allowed at each seam. Core installs no behavioral nudges. Code Squid owns its
+concrete hooks under `code_squid/hooks/` and decides which to enable.
+
+The generic `compaction_applied` and `read_result_trimmed` notifications remain
+public contracts. AgentLoop dispatches the former only after compaction has
+been applied and persisted, and bridges request-only read trimming into the
+latter with retained source ranges. These seams support host observations of
+model-visible context independently of any built-in coverage policy. Hook
+registration order, context/result transformations, transient guidance and
+finalization/follow-up contracts are unchanged.

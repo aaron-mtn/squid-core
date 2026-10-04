@@ -8,7 +8,6 @@ from squid_core.agent_loop import AgentLoop
 from squid_core.hooks import (
     HookRunner,
     ReadResultTrimmedContext,
-    RepeatedReadNudge,
     ToolResultContext,
 )
 from squid_core.settings import ToolResultTrimmingSettings
@@ -17,6 +16,30 @@ from squid_core.tool_result_trimming import (
     render_tool_result_for_model,
 )
 from squid_core.tools import ToolResults
+
+
+def test_request_trimming_notifies_host_without_changing_canonical_source() -> None:
+    """Hosts receive retained ranges even without a built-in coverage hook."""
+    observed = []
+
+    class VisibilityObserver:
+        def read_result_trimmed(self, ctx) -> None:
+            observed.append(ctx)
+
+    runner = HookRunner([VisibilityObserver()])
+    messages = _after_exposure(_tool_turn(
+        "old-read", "read_file",
+        _read_result("source.py", "one\ntwo\nthree\n", start_line=1, end_line=3),
+    ))
+    original = copy.deepcopy(messages)
+    render_messages_for_model(
+        messages,
+        ToolResultTrimmingSettings(recent_full_results=0, read_old_content_chars=0),
+        on_read_result_trimmed=runner.read_result_trimmed,
+    )
+
+    assert observed == [ReadResultTrimmedContext("old-read", "source.py", ())]
+    assert messages == original
 
 
 def _tool_turn(call_id: str, name: str, result: dict) -> list[dict]:
@@ -96,30 +119,6 @@ def _read_result(
     if returned_line_ranges is not None:
         result["returned_line_ranges"] = returned_line_ranges
     return result
-
-
-def _observe_read(
-    runner: HookRunner,
-    path: str,
-    call_id: str,
-    result: dict,
-):
-    return runner.tool_result(
-        ToolResultContext(
-            session_id=None,
-            repo_root=str(Path(path).parent),
-            action={
-                "tool": "read_file",
-                "tool_call_id": call_id,
-                "args": {"path": path},
-            },
-            result=result,
-        )
-    )
-
-
-def _apply_trim_event(runner: HookRunner, event: ReadResultTrimmedContext) -> None:
-    runner.read_result_trimmed(event)
 
 
 def test_newest_results_are_textual_without_changing_pairing() -> None:
@@ -338,53 +337,6 @@ def test_failed_batch_keeps_skipped_pairing_without_payload_expansion() -> None:
     assert rendered[2]["tool_call_id"] == "skipped"
     assert rendered[2]["content"].startswith("READ_FILE FAILED")
     assert "reason: earlier_action_failed" in rendered[2]["content"]
-
-
-def test_large_read_batch_keeps_coverage_truthful_until_later_trimming(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "a.py")
-    content = "alpha\nbeta\n"
-    read = _read_result(path, content, start_line=1, end_line=2)
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-first", read)
-    masked = _observe_read(runner, path, "read-again", read).updated_tool_output
-    calls = [
-        ("read-first", "read_file", read),
-        *[
-            (
-                f"command-{index}",
-                "run_command",
-                {"ok": True, "tool": "run_command", "output": str(index)},
-            )
-            for index in range(5)
-        ],
-        ("read-again", "read_file", masked),
-    ]
-    settings = ToolResultTrimmingSettings(
-        recent_full_results=2,
-        read_old_content_chars=0,
-    )
-
-    first_request = render_messages_for_model(
-        _tool_batch(calls),
-        settings,
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    assert content.rstrip() in first_request[1]["content"]
-    assert first_request[-1]["content"].startswith("READ_FILE SKIPPED")
-    assert _observe_read(runner, path, "still-covered", read).updated_tool_output[
-        "already_covered"
-    ] is True
-
-    render_messages_for_model(
-        _after_exposure(_tool_batch(calls)),
-        settings,
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    assert _observe_read(runner, path, "after-trim", read).updated_tool_output == read
 
 
 def test_disjoint_read_regions_have_exact_headers_and_gap_marker() -> None:
@@ -948,265 +900,3 @@ def test_unknown_tools_are_left_unchanged() -> None:
 
     assert rendered == messages
     assert rendered[-1] is messages[-1]
-
-
-def test_untrimmed_old_read_remains_covered(tmp_path: Path) -> None:
-    path = str(tmp_path / "script.js")
-    content = "".join(f"line {line:03}\n" for line in range(1, 11))
-    result = _read_result(path, content, start_line=1, end_line=10)
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", result)
-
-    render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", result)),
-        ToolResultTrimmingSettings(
-            recent_full_results=0,
-            read_old_content_chars=len(content),
-        ),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    assert _observe_read(runner, path, "read-2", result).updated_tool_output[
-        "already_covered"
-    ] is True
-
-
-def test_fully_trimmed_read_can_be_read_again_and_restores_coverage(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "script.js")
-    lines = [f"line {line:03}\n" for line in range(1, 501)]
-    result = _read_result(path, "".join(lines), start_line=1, end_line=500)
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", result)
-    _observe_read(runner, path, "read-redundant", result)
-    assert runner.hooks[0]._redundant_counts
-
-    render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", result)),
-        ToolResultTrimmingSettings(recent_full_results=0, read_old_content_chars=0),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    assert runner.hooks[0]._redundant_counts == {}
-    recovery = _read_result(path, "".join(lines[:250]), start_line=1, end_line=250)
-    reread = _observe_read(runner, path, "read-2", recovery)
-    assert reread.updated_tool_output == recovery
-    assert _observe_read(runner, path, "read-3", recovery).updated_tool_output[
-        "already_covered"
-    ] is True
-
-
-def test_partial_read_retention_updates_only_visible_line_coverage(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "script.js")
-    content = "".join(f"line {line:03}\n" for line in range(1, 11))
-    result = _read_result(path, content, start_line=1, end_line=10)
-    runner = HookRunner([RepeatedReadNudge()])
-    hook = runner.hooks[0]
-    _observe_read(runner, path, "read-1", result)
-    marker_chars = len("\n[older payload truncated]\n")
-
-    render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", result)),
-        ToolResultTrimmingSettings(
-            recent_full_results=0,
-            # Two complete nine-character source lines survive at each end.
-            read_old_content_chars=marker_chars + 36,
-        ),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    assert list(hook._coverage.values()) == [[(1, 2), (9, 10)]]
-    retained = _read_result(path, content[:18], start_line=1, end_line=2)
-    assert _observe_read(runner, path, "read-2", retained).updated_tool_output[
-        "already_covered"
-    ] is True
-    trimmed = _read_result(path, content[18:72], start_line=3, end_line=8)
-    assert _observe_read(runner, path, "read-3", trimmed).updated_tool_output == trimmed
-
-
-def test_trimmed_truncated_full_read_keeps_each_retained_source_range(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "large.py")
-    all_lines = [f"line {line:03}\n" for line in range(1, 21)]
-    content = "".join((*all_lines[:5], *all_lines[15:]))
-    ranges = [
-        {"start_line": 1, "end_line": 5},
-        {"start_line": 16, "end_line": 20},
-    ]
-    result = _read_result(
-        path,
-        content,
-        start_line=1,
-        end_line=20,
-        returned_line_ranges=ranges,
-    )
-    runner = HookRunner([RepeatedReadNudge()])
-    hook = runner.hooks[0]
-    _observe_read(runner, path, "read-1", result)
-
-    render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", result)),
-        ToolResultTrimmingSettings(
-            recent_full_results=0,
-            read_old_content_chars=len("\n[older payload truncated]\n") + 36,
-        ),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    assert list(hook._coverage.values()) == [[(1, 2), (19, 20)]]
-    middle = _read_result(path, "".join(all_lines[2:5]), start_line=3, end_line=5)
-    assert _observe_read(runner, path, "read-2", middle).updated_tool_output == middle
-
-
-def test_trimmed_read_metadata_does_not_preserve_source_coverage(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "script.js")
-    content = "".join(f"line {line:03}\n" for line in range(1, 11))
-    result = _read_result(path, content, start_line=1, end_line=10)
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", result)
-
-    rendered = render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", result)),
-        ToolResultTrimmingSettings(recent_full_results=0, read_old_content_chars=0),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-    observation = _observation(rendered[-2])
-
-    assert "path: " + path in observation
-    assert "SOURCE OMITTED FROM OLDER RESULT" in observation
-    assert _observe_read(runner, path, "read-2", result).updated_tool_output == result
-
-
-def test_trimming_one_read_preserves_overlapping_visible_result(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "script.js")
-    lines = [f"line {line:03}\n" for line in range(1, 11)]
-    first = _read_result(path, "".join(lines[:5]), start_line=1, end_line=5)
-    second = _read_result(path, "".join(lines[3:]), start_line=4, end_line=10)
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", first)
-    _observe_read(runner, path, "read-2", second)
-
-    render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", first)),
-        ToolResultTrimmingSettings(recent_full_results=0, read_old_content_chars=0),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    reread = _observe_read(runner, path, "read-3", second).updated_tool_output
-    assert reread["content"] == "".join(lines[3:5])
-    assert reread["returned_line_ranges"] == [
-        {"start_line": 4, "end_line": 5}
-    ]
-
-
-def test_multi_range_read_omits_covered_regions_but_preserves_novel_regions(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "script.js")
-    lines = [f"line {line:03}\n" for line in range(1, 21)]
-    first = _read_result(path, "".join(lines[1:4]), start_line=2, end_line=4)
-    second_ranges = [
-        {"start_line": 2, "end_line": 5},
-        {"start_line": 15, "end_line": 17},
-    ]
-    second = _read_result(
-        path,
-        "".join((*lines[1:5], *lines[14:17])),
-        start_line=2,
-        end_line=17,
-        returned_line_ranges=second_ranges,
-    )
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", first)
-
-    shaped = _observe_read(runner, path, "read-2", second).updated_tool_output
-
-    assert shaped["content"] == "".join(
-        (
-            lines[4],
-            "<<< CODE SQUID: lines 6-14 omitted from this read >>>\n",
-            *lines[14:17],
-        )
-    )
-    assert shaped["returned_line_ranges"] == [
-        {"start_line": 5, "end_line": 5},
-        {"start_line": 15, "end_line": 17},
-    ]
-    assert shaped["omitted_line_ranges"] == [
-        {"start_line": 2, "end_line": 4}
-    ]
-
-
-def test_fully_redundant_multi_range_read_is_masked(tmp_path: Path) -> None:
-    path = str(tmp_path / "script.js")
-    lines = [f"line {line:03}\n" for line in range(1, 21)]
-    ranges = [
-        {"start_line": 2, "end_line": 4},
-        {"start_line": 15, "end_line": 17},
-    ]
-    result = _read_result(
-        path,
-        "".join((*lines[1:4], *lines[14:17])),
-        start_line=2,
-        end_line=17,
-        returned_line_ranges=ranges,
-    )
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", result)
-
-    masked = _observe_read(runner, path, "read-2", result).updated_tool_output
-
-    assert masked["already_covered"] is True
-    assert masked["returned_line_ranges"] == ranges
-    assert "content" not in masked
-
-
-def test_trim_notification_stays_aligned_after_patch_line_shift(
-    tmp_path: Path,
-) -> None:
-    path = str(tmp_path / "script.js")
-    content = "".join(f"line {line:03}\n" for line in range(1, 11))
-    result = _read_result(path, content, start_line=1, end_line=10)
-    runner = HookRunner([RepeatedReadNudge()])
-    _observe_read(runner, path, "read-1", result)
-    runner.tool_result(
-        ToolResultContext(
-            session_id=None,
-            repo_root=str(tmp_path),
-            action={"tool": "apply_patch", "args": {"path": path}},
-            result={
-                "ok": True,
-                "tool": "apply_patch",
-                "path": path,
-                "start_line": 3,
-                "end_line_before": 3,
-                "end_line_after": 4,
-            },
-        )
-    )
-
-    render_messages_for_model(
-        _after_exposure(_tool_turn("read-1", "read_file", result)),
-        ToolResultTrimmingSettings(
-            recent_full_results=0,
-            # Retain original lines 1-2 and 9-10; the latter now map to 10-11.
-            read_old_content_chars=len("\n[older payload truncated]\n") + 36,
-        ),
-        on_read_result_trimmed=lambda event: _apply_trim_event(runner, event),
-    )
-
-    retained_tail = _read_result(path, "tail a\ntail b\n", start_line=10, end_line=11)
-    assert _observe_read(
-        runner, path, "read-2", retained_tail
-    ).updated_tool_output["already_covered"] is True
-    removed_shifted = _read_result(path, "fresh a\nfresh b\n", start_line=5, end_line=6)
-    removed_response = _observe_read(runner, path, "read-3", removed_shifted)
-    assert removed_response.updated_tool_output == removed_shifted

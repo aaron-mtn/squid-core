@@ -14,9 +14,6 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from squid_core.hooks.redundant_read import RepeatedReadNudge
-from squid_core.hooks.runner import ToolResultContext
-from squid_core.hooks.too_many_reads import TooManyReadsNudge
 from squid_core.model_adapter import ModelAdapter, ModelRequestError
 from squid_core.image_content import VISION_UNAVAILABLE_MESSAGE
 from squid_core.settings import ToolResultTrimmingSettings

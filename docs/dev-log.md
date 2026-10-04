@@ -77,3 +77,31 @@
   Ollama and httpx modules were absent and explicitly blocked their imports.
   Installed spawner/generation imports, minimal BaseProvider inference, invalid
   response rejection and pip check passed. No live inference was performed.
+
+- 2026-10-04: Extracted behavioral hooks into Code Squid. Moved
+  hooks/no_progress.py (RepeatedFailureNudge), too_many_reads.py and
+  post_verification.py plus focused and behavioral loop integration tests to
+  code_squid/hooks/ and Code Squid tests. Deleted redundant_read.py and its
+  unit/integration tests, removing RepeatedReadNudge rather than retaining a
+  compatibility wrapper. Core's hook exports now contain generic mechanisms
+  only. HookRunner, loader, contexts, transformations and all dispatch paths
+  are unchanged. Retained compaction_applied and read_result_trimmed as public
+  host notification contracts; generic compaction dispatch/persistence tests
+  remain, and host-only read-visibility tests cover notification order and
+  request trimming without modifying canonical source.
+  Code Squid still enables TooManyReadsNudge and PostVerificationNudge and
+  disables RepeatedFailureNudge. Removed the repeated_read configuration key.
+  Compatibility: concrete hook/constant imports move to code_squid.hooks;
+  deleted-hook imports and old repeated_read settings are unsupported.
+  Verification: focused Core hook/loader/loop/trimming/boundary tests 185
+  passed; full Core 734 passed, 1 platform skip. Focused Code Squid hook/
+  composition/settings/boundary tests 207 passed; full Code Squid 777 passed;
+  Providers image integration 4 passed and full Providers 139 passed.
+  compileall passed across source/tests in all three repositories. Fresh-process
+  blocked-import tests confirm Core imports and host hook execution without
+  Code Squid or transports. AST comparison confirms moved behavior is unchanged
+  apart from imports; production source checks confirm no application imports
+  or behavioral hook classes in Core and no deleted-hook references anywhere
+  in the three production packages. Application file-tree generation and
+  git diff --check passed. No live inference. No follow-up implementation
+  deferred; package release and commits remain outside this patch.
