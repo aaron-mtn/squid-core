@@ -250,9 +250,8 @@ def _request_error(
 class ModelAdapter:
     """Owns provider communication and tool-call normalization; must not own loop control, session storage, or coding-agent policy."""
 
-    # Store the provider and model name used for requests.
-    # The provider handles the raw API call, while this adapter normalizes
-    # provider output into the small internal reply shape used by the loop.
+    # Providers translate native output into ModelResponse; this adapter turns
+    # that Core contract into loop replies and validates tool-call arguments.
     def __init__(
         self,
         provider,
@@ -329,7 +328,7 @@ class ModelAdapter:
                 if self._asset_loader is None:
                     raise RuntimeError("session image asset loader is unavailable")
                 transport_options["asset_loader"] = self._asset_loader
-            return transport(**request, **transport_options)
+            response = transport(**request, **transport_options)
         except StreamCancelled:
             # Cooperative cancellation is loop control, not a provider failure.
             raise
@@ -337,6 +336,16 @@ class ModelAdapter:
             # Provider-specific failures are wrapped at this boundary so the
             # host can distinguish transport failures from application bugs.
             raise _request_error(exc) from exc
+
+        # Every transport path shares this boundary. Do not accept SDK objects
+        # by shape: native response translation belongs to the provider.
+        if not isinstance(response, ModelResponse):
+            error = TypeError(
+                "Provider must return ModelResponse; "
+                f"received {type(response).__name__}"
+            )
+            raise _request_error(error, failure_class="malformed_response") from error
+        return response
 
     def prepare_request(
         self,

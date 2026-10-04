@@ -46,3 +46,34 @@
   deleting those generated artifacts had been rejected by automatic review with
   the reason "blocked by policy". Deferred only commits, remote publication and
   package releases; no architecture or runtime work remains deferred.
+
+- 2026-10-04: Polished the existing single provider contract for standalone
+  integration. Traced BaseProvider, ModelAdapter, construction/injection, every
+  Core provider call and the associated tests before editing. Normal inference
+  already required only create_response(model, messages, tools); neither
+  subclassing nor readiness, discovery, streaming, vision or cancellation
+  methods were required. Kept that minimum and existing keyword request shape
+  instead of adding a request wrapper, alternate callable API or registry.
+  Clarified BaseProvider's optional defaults and host-only operations, corrected
+  the adapter's ownership comment and added a minimal integration README example.
+  All completed transports now explicitly require ModelResponse at the shared
+  adapter boundary, with a clear malformed_response ModelRequestError for invalid
+  outputs. Response lookalikes previously slipped through attribute-based
+  handling; third-party providers returning them must translate to ModelResponse.
+  Existing squid-providers implementations need no changes.
+  Added regressions for plain/minimal BaseProvider objects, normal and text
+  inference, streaming fallback, the default agent loop with streamed display
+  enabled/disabled, and invalid response contracts across all transport paths.
+  Updated architecture docs; retained Core ownership of response contracts and
+  tool validation. Readiness/discovery remain explicitly unimplemented in the
+  base rather than fabricating backend capabilities. Optional transport controls
+  and streaming signatures are deliberately unchanged; hooks, retries, replay,
+  sessions and tool validation semantics were not redesigned.
+  Verification: focused provider/adapter/generation/spawner/boundary tests
+  103 passed; full Core suite 865 passed, 1 skipped; sibling Providers suite
+  139 passed. Python compileall and git diff --check passed. Built and installed
+  Core with its declared dependencies into a fresh isolated environment; outside
+  the checkout, confirmed application, squid-providers, OpenAI, Anthropic,
+  Ollama and httpx modules were absent and explicitly blocked their imports.
+  Installed spawner/generation imports, minimal BaseProvider inference, invalid
+  response rejection and pip check passed. No live inference was performed.

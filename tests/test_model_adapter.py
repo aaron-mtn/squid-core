@@ -3,6 +3,7 @@
 from squid_core.model_response import ModelResponse, TokenUsage, ToolCall
 
 import pytest
+from types import SimpleNamespace
 
 from squid_core.model_adapter import (
     ModelAdapter,
@@ -641,7 +642,33 @@ def test_malformed_provider_response_has_precise_failure_class() -> None:
 
     details = model_request_error_details(exc_info.value)
     assert details["failure_class"] == "malformed_response"
-    assert details["underlying_error_type"] == "AttributeError"
+    assert details["underlying_error_type"] == "TypeError"
+    assert details["_transient"] is False
+
+
+@pytest.mark.parametrize("response", [
+    None,
+    {"content": "done"},
+    SimpleNamespace(**vars(ModelResponse("done"))),
+])
+@pytest.mark.parametrize("path", [
+    "respond", "complete_text", "respond_streaming", "complete_text_streaming",
+])
+def test_all_transport_paths_require_model_response(response, path):
+    provider = StreamingProvider(response, [])
+    adapter = ModelAdapter(provider, "test-model")
+    kwargs = {"messages": [{"role": "user", "content": "hi"}]}
+    if path.startswith("respond"):
+        kwargs["tool_definitions"] = []
+    if "streaming" in path:
+        kwargs["on_text_delta"] = lambda _delta: None
+
+    with pytest.raises(ModelRequestError, match="Provider must return ModelResponse") as caught:
+        getattr(adapter, path)(**kwargs)
+
+    details = model_request_error_details(caught.value)
+    assert details["failure_class"] == "malformed_response"
+    assert details["underlying_error_type"] == "TypeError"
     assert details["_transient"] is False
 
 

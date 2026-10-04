@@ -8,9 +8,16 @@ class StreamCancelled(Exception):
 
 
 class BaseProvider:
-    """Owns the raw request/response call to a model provider; must not own agent policy, loop control, or tool execution."""
+    """Optional base for the single provider contract.
+
+    Normal inference requires only ``create_response(model, messages, tools)``
+    returning Core's ``ModelResponse``. Subclassing is optional; plain objects
+    implementing that operation use the same ModelAdapter path. Providers own
+    native API translation, never agent policy, loop control, or tool execution.
+    """
 
     def supports_streaming(self) -> bool:
+        """Opt in only when ``stream_chat`` is implemented."""
         return False
 
     def supports_image_input(self, model: str) -> bool:
@@ -19,11 +26,11 @@ class BaseProvider:
         return False
 
     def is_ready(self) -> bool:
-        """Return whether the configured backend can currently accept work."""
+        """Optional host readiness check; Core inference never calls this."""
         raise NotImplementedError
 
     def list_models(self) -> list[str]:
-        """Return real model identifiers exposed by the configured backend."""
+        """Optional host discovery; Core uses the caller's explicit model name."""
         raise NotImplementedError
 
     def create_response(
@@ -35,6 +42,12 @@ class BaseProvider:
         please_stop_contemplating_the_void: bool = False,
         asset_loader=None,
     ) -> ModelResponse:
+        """Translate a Core request into completed, provider-neutral output.
+
+        Core passes the prepared request as keyword arguments, not a new
+        request wrapper. The first three fields suffice for normal inference;
+        remaining options apply only to callers requesting those capabilities.
+        """
         raise NotImplementedError
 
     def stream_chat(
@@ -51,4 +64,5 @@ class BaseProvider:
         on_reasoning_delta=None,
         asset_loader=None,
     ) -> ModelResponse:
+        """Optional streaming transport returning the same completed contract."""
         raise NotImplementedError
