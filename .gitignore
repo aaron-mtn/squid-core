@@ -1,0 +1,25 @@
+# Virtual environment
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Code Squid local runtime state
+.code-squid/
+
+# Generated local reference files
+**/filetree.md
+**/FILETREE.md
+
+# Environment files
+.env
+
+# OS/editor junk
+.DS_Store
+
+# Local Python package build metadata
+*.egg-info/
+build/
+dist/

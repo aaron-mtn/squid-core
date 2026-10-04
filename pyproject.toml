@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "squid-core"
+version = "0.1.0"
+description = "Reusable agent runtime"
+requires-python = ">=3.11"
+dependencies = ["epub-utils==0.1.0a1", "odfpy", "openpyxl", "python-docx", "Pillow", "PyMuPDF"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+namespaces = false
+include = ["squid_core", "squid_core.*"]
