@@ -1,4 +1,4 @@
-"""Read UTF-8 text files with Code Squid's established range semantics."""
+"""Read UTF-8 text files with established range semantics."""
 
 from typing import Sequence
 
@@ -200,7 +200,7 @@ def _render_ranges(
     for start_line, end_line in ranges:
         if previous_end is not None and start_line > previous_end + 1:
             parts.append(
-                f"<<< CODE SQUID: lines {previous_end + 1}-{start_line - 1} "
+                f"<<< SQUID CORE: lines {previous_end + 1}-{start_line - 1} "
                 "omitted from this read >>>\n"
             )
         parts.extend(lines[start_line - 1 : end_line])

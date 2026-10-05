@@ -55,7 +55,7 @@ def test_read_file_rejects_relative_path_and_succeeds_with_absolute_path(tmp_pat
     }
 
 
-def test_run_command_uses_selected_repo_root_as_cwd(tmp_path: Path) -> None:
+def test_run_command_uses_selected_workspace_root_as_cwd(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     executable = (
@@ -84,7 +84,7 @@ def test_run_command_exposes_and_returns_explicit_verification_intent(
         "type": "boolean",
         "description": (
             "REQUIRED. True when this command checks whether the current "
-            "implementation is correct; false otherwise."
+            "task results are correct; false otherwise."
         ),
     }
     assert parameters["required"] == ["command", "verification"]
@@ -218,7 +218,7 @@ def test_read_file_truncates_large_full_read_by_lines_and_reports_ranges(
     file_path = tmp_path / "1001-lines.txt"
     lines = [f"line {number}\n" for number in range(1, 1002)]
     original_content = "".join(lines)
-    separator = "<<< CODE SQUID: lines 501-501 omitted from this read >>>\n"
+    separator = "<<< SQUID CORE: lines 501-501 omitted from this read >>>\n"
     expected_content = "".join((*lines[:500], separator, *lines[-500:]))
     file_path.write_text(original_content, encoding="utf-8")
 
@@ -342,7 +342,7 @@ def test_read_file_returns_disjoint_ranges_in_source_order(tmp_path: Path) -> No
     assert result["content"] == "".join(
         (
             *lines[1:4],
-            "<<< CODE SQUID: lines 5-14 omitted from this read >>>\n",
+            "<<< SQUID CORE: lines 5-14 omitted from this read >>>\n",
             *lines[14:17],
         )
     )
@@ -391,7 +391,7 @@ def test_read_file_merges_overlapping_and_adjacent_ranges(
 
     assert result["ok"] is True
     assert result["content"] == "".join(lines[1:9])
-    assert "CODE SQUID" not in result["content"]
+    assert "SQUID CORE" not in result["content"]
     assert result["returned_line_ranges"] == [expected]
 
 
@@ -540,7 +540,7 @@ def test_read_file_uses_supplied_sizing_settings_and_keeps_truncation_metadata(
     assert result["content"] == "".join(
         (
             *lines[:5],
-            "<<< CODE SQUID: lines 6-6 omitted from this read >>>\n",
+            "<<< SQUID CORE: lines 6-6 omitted from this read >>>\n",
             *lines[-5:],
         )
     )

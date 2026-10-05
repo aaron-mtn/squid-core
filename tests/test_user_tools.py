@@ -349,7 +349,7 @@ def run(args, context=None):
     return {
         "ok": True,
         "message": args["message"],
-        "context_repo": context["repo_root"],
+        "context_repo": context["workspace_root"],
         "context_tool": context["tool_name"],
         "context_session": context["session_id"],
     }
@@ -357,8 +357,8 @@ def run(args, context=None):
     )
     registry = build_user_tool_registry(app_home=home, session_id="session-1")
     executor = ToolExecutor(
-        repo_root=repo,
-        session=Session(repo_root=repo),
+        workspace_root=repo,
+        session=Session(workspace_root=repo),
         tools={"echo_args": registry["echo_args"]},
     )
 

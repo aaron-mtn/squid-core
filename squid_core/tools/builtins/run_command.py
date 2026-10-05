@@ -41,7 +41,7 @@ def tool_definition() -> dict:
         "function": {
             "name": TOOL_NAME,
             "description": (
-                "Run one shell command from the repository root and return its "
+                "Run one shell command from the workspace root and return its "
                 "combined output and exit status."
             ),
             "parameters": {
@@ -52,7 +52,7 @@ def tool_definition() -> dict:
                         "type": "boolean",
                         "description": (
                             "REQUIRED. True when this command checks whether the current "
-                            "implementation is correct; false otherwise."
+                            "task results are correct; false otherwise."
                         ),
                     },
                 },
@@ -63,7 +63,7 @@ def tool_definition() -> dict:
 
 
 def execute(
-    repo_root: Path,
+    workspace_root: Path,
     command: str,
     verification: bool,
     platform_context: PlatformContext | None = None,
@@ -94,7 +94,7 @@ def execute(
         process = subprocess.Popen(
             subprocess_command,
             shell=use_shell,
-            cwd=repo_root,
+            cwd=workspace_root,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             **popen_options,
@@ -390,7 +390,7 @@ def _create_windows_job(process: subprocess.Popen) -> _WindowsJob | None:
 
 
 def _set_job_kill_on_close(kernel32, job_handle: int, *, enabled: bool) -> None:
-    """Configure the one Job limit Code Squid relies on."""
+    """Configure the Job limit used to clean up the owned process tree."""
     import ctypes
     from ctypes import wintypes
 

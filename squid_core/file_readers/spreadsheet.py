@@ -109,7 +109,7 @@ def spreadsheet_result(
         tail_start = total_lines - tail_count + 1
         content = (
             "".join(lines[:head_count])
-            + f"<<< CODE SQUID: lines {head_count + 1}-{tail_start - 1} "
+            + f"<<< SQUID CORE: lines {head_count + 1}-{tail_start - 1} "
             "omitted from this spreadsheet read >>>\n"
             + "".join(lines[-tail_count:])
         )

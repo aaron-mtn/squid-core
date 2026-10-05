@@ -44,7 +44,7 @@ class UndoStore:
             "status": "active",
         }
         if workspace_root is not None:
-            metadata["repo_root"] = str(Path(workspace_root).resolve())
+            metadata["workspace_root"] = str(Path(workspace_root).resolve())
         store._write_metadata(metadata)
         store._write_index([])
         return store
@@ -168,7 +168,7 @@ class UndoStore:
             )
 
         current_root = _resolve_path(Path(workspace_root).expanduser(), "workspace")
-        recorded_root_value = metadata.get("repo_root")
+        recorded_root_value = metadata.get("workspace_root")
         if not isinstance(recorded_root_value, str) or not recorded_root_value:
             raise ValueError("Undo buffer has no valid recorded workspace root")
         recorded_root_path = Path(recorded_root_value).expanduser()

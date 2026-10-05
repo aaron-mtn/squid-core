@@ -1,3 +1,5 @@
+"""Session transcript and factual file activity within an application workspace."""
+
 from pathlib import Path
 from typing import Any
 
@@ -5,10 +7,10 @@ from typing import Any
 class Session:
     """Owns message history and tiny structured state; must not own model calls, tool execution, or recovery strategy."""
 
-    # Initialize a new session with the repo root and empty tracking containers.
+    # Initialize a new session with the workspace root and empty tracking containers.
     # Each session starts with no messages, no files read, and no files written.
-    def __init__(self, repo_root: Path) -> None:
-        self.repo_root = repo_root
+    def __init__(self, workspace_root: Path) -> None:
+        self.workspace_root = workspace_root
         self.messages: list[dict[str, Any]] = []
         self.files_read: set[str] = set()
         self.files_written: set[str] = set()

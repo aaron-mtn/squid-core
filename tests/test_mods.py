@@ -123,6 +123,32 @@ def test_canonical_discovery_uses_supplied_home_and_ignores_legacy_layout(tmp_pa
         load_mod("legacy", selected_home)
 
 
+@pytest.mark.parametrize("registry_kind", ["default", "app", "empty"])
+def test_discovery_load_validation_and_resolution_share_registry(tmp_path, registry_kind) -> None:
+    home = tmp_path / "home"
+    custom = {"catalog_record": {
+        "execute": lambda workspace_root: {"ok": True, "message": "catalog"},
+        "definition": lambda: {"type": "function", "function": {"name": "catalog_record"}},
+    }}
+    registry = {"default": None, "app": custom, "empty": {}}[registry_kind]
+    requested = "read_file" if registry_kind == "default" else "catalog_record"
+    _write_mod(home, tools=(requested,))
+    discovered = discover_mods(home, built_in_tools=registry)["review-pack"]
+    loaded = load_mod("review-pack", home, built_in_tools=registry)
+    assert discovered.valid == loaded.valid == (registry_kind != "empty")
+    assert discovered.errors == loaded.errors == validate_mod(loaded, home, built_in_tools=registry)
+    if registry_kind == "empty":
+        with pytest.raises(ModResolutionError, match="unknown Tool 'catalog_record'"):
+            resolve_mod("review-pack", home, built_in_tools=registry)
+    else:
+        resolved = resolve_mod("review-pack", home, built_in_tools=registry)
+        assert resolved.metadata.valid
+        assert tuple(resolved.tools) == (requested,)
+        assert resolved.tools[requested] is (TOOLS if registry is None else registry)[requested]
+    if registry_kind == "app":
+        assert not discover_mods(home)["review-pack"].valid
+
+
 def test_standalone_resources_remain_discoverable_with_explicit_home(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_skill(home / "skills" / "loose-skill" / "SKILL.md", "loose-skill", (), "Loose")
@@ -159,7 +185,7 @@ def test_runtime_resolves_local_skill_lazy_tool_and_loaded_hook(tmp_path: Path) 
     _write_tool(mod_dir / "tools", "custom-tool", tool_marker, "mod-tool")
     _write_hook(mod_dir / "hooks", "custom-hook", hook_marker, "mod-hook")
 
-    resolved = resolve_mod("review-pack", home, repo_root=tmp_path)
+    resolved = resolve_mod("review-pack", home, workspace_root=tmp_path)
 
     assert resolved.metadata.name == "review-pack"
     assert resolved.skill.source == "mod"
@@ -181,7 +207,7 @@ def test_mod_local_resources_win_over_same_named_loose_resources(tmp_path: Path)
     _write_tool(mod_dir / "tools", "custom-tool", result="mod-tool")
     _write_hook(mod_dir / "hooks", "custom-hook", source="mod-hook")
 
-    resolved = resolve_mod("review-pack", home, repo_root=tmp_path)
+    resolved = resolve_mod("review-pack", home, workspace_root=tmp_path)
 
     assert resolved.skill.description == "Local skill"
     assert resolved.tools["custom-tool"]["execute"](tmp_path)["message"] == "mod-tool"
@@ -200,7 +226,7 @@ def test_mod_can_reference_shared_tools_and_hooks(tmp_path: Path) -> None:
         hooks=("shared-hook",),
     )
 
-    resolved = resolve_mod("review-pack", home, repo_root=tmp_path)
+    resolved = resolve_mod("review-pack", home, workspace_root=tmp_path)
 
     assert resolved.skill.source == "mod"
     assert resolved.tools["shared-tool"]["execute"](tmp_path)["message"] == "shared-tool"

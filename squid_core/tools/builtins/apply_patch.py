@@ -127,7 +127,7 @@ def tool_definition() -> dict:
 
 # Apply exactly one exact text replacement and return compact metadata.
 def execute(
-    _repo_root: Path,
+    _workspace_root: Path,
     path: str | None = None,
     old_text: str | None = None,
     new_text: str | None = None,

@@ -35,8 +35,10 @@ from .model import (
 )
 
 
-def discover_mods(app_home: Path | str) -> dict[str, Mod]:
-    """Discover ``mods/*/mod.yaml`` below the supplied application home."""
+def discover_mods(
+    app_home: Path | str, *, built_in_tools: dict | None = None,
+) -> dict[str, Mod]:
+    """Discover Mods and validate against the supplied registry or Core defaults."""
     root = Path(app_home) / "mods"
     if not root.is_dir():
         return {}
@@ -46,21 +48,23 @@ def discover_mods(app_home: Path | str) -> dict[str, Mod]:
         (path for path in root.iterdir() if path.is_dir()),
         key=lambda path: (path.name.lower(), path.name),
     ):
-        mod = _load_mod_dir(mod_dir, app_home=Path(app_home))
+        mod = _load_mod_dir(mod_dir, app_home=Path(app_home), built_in_tools=built_in_tools)
         if mod is not None:
             mods[mod_dir.name] = mod
     return mods
 
 
-def load_mod(name: str, app_home: Path | str) -> Mod:
-    """Load one named Mod from the supplied application home."""
+def load_mod(
+    name: str, app_home: Path | str, *, built_in_tools: dict | None = None,
+) -> Mod:
+    """Load a named Mod and validate against the supplied registry or Core defaults."""
     if not isinstance(name, str) or not SAFE_MOD_NAME_RE.fullmatch(name):
         raise ModResolutionError(f"Invalid Mod name: {name!r}")
     root = (Path(app_home) / "mods").resolve()
     mod_dir = (root / name).resolve()
     if mod_dir == root or root not in mod_dir.parents:
         raise ModResolutionError(f"Invalid Mod path: {name!r}")
-    mod = _load_mod_dir(mod_dir, app_home=Path(app_home))
+    mod = _load_mod_dir(mod_dir, app_home=Path(app_home), built_in_tools=built_in_tools)
     if mod is None:
         raise ModResolutionError(f"Unknown Mod: {name}")
     return mod
@@ -103,14 +107,14 @@ def resolve_mod(
     app_home: Path | str,
     *,
     selected_skill: str | None = None,
-    repo_root: Path | str | None = None,
+    workspace_root: Path | str | None = None,
     session_id: str | None = None,
     built_in_tools: dict | None = None,
 ) -> ResolvedMod:
     """Resolve one packaged Skill (default when omitted) and Mod-wide Hooks."""
     app_home = Path(app_home)
     protected_tools = TOOLS if built_in_tools is None else built_in_tools
-    mod = load_mod(name, app_home)
+    mod = load_mod(name, app_home, built_in_tools=protected_tools)
     errors = validate_mod(mod, app_home, built_in_tools=protected_tools)
     if errors:
         raise ModResolutionError(
@@ -126,7 +130,7 @@ def resolve_mod(
     selected_metadata = _select_tool_metadata(mod, app_home, protected_tools, skill.allowed_tools)
     custom_registry = build_user_tool_registry_from_metadata(
         selected_metadata,
-        repo_root=repo_root,
+        workspace_root=workspace_root,
         session_id=session_id,
     )
     available_tools = {**custom_registry, **protected_tools}
@@ -135,7 +139,9 @@ def resolve_mod(
     return ResolvedMod(metadata=replace(mod, valid=True, errors=()), skill=skill, tools=tools, hooks=hooks)
 
 
-def _load_mod_dir(mod_dir: Path, *, app_home: Path) -> Mod | None:
+def _load_mod_dir(
+    mod_dir: Path, *, app_home: Path, built_in_tools: dict | None = None,
+) -> Mod | None:
     metadata_path = mod_dir / "mod.yaml"
     if not metadata_path.is_file():
         return None
@@ -151,7 +157,9 @@ def _load_mod_dir(mod_dir: Path, *, app_home: Path) -> Mod | None:
         )
         skills, _ = _discover_packaged_skills(mod)
         mod = replace(mod, skills=skills)
-        errors = validate_mod(mod, app_home)
+        # Discovery and execution must validate against the same host registry;
+        # Core tools are only the default when the caller omits its registry.
+        errors = validate_mod(mod, app_home, built_in_tools=built_in_tools)
         return replace(mod, valid=not errors, errors=errors)
     except (ModMetadataError, OSError) as error:
         return Mod(

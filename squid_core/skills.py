@@ -7,7 +7,7 @@ from pathlib import Path
 
 PROMPT_SECTION_MODES = {"replace", "append"}
 SUPPORTED_PROMPT_SECTIONS = {
-    "SYSTEM_PROMPT_INTRO",
+    "AGENT_IDENTITY",
     "TOOL_USAGE_GUIDANCE",
     "FINAL_SUMMARY_REQUIREMENTS",
 }
@@ -28,6 +28,8 @@ class PromptSectionOverride:
 
 @dataclass(frozen=True)
 class Skill:
+    """Instructions and permitted tools; an omitted tool list retains host defaults."""
+
     name: str
     description: str
     instructions: str
@@ -37,6 +39,22 @@ class Skill:
     source: str = "user"
     editable: bool = True
     prompt_sections: dict[str, PromptSectionOverride] = field(default_factory=dict)
+
+
+def select_skill_tools(skill: Skill | None, available_tools: dict) -> dict:
+    """Restrict a supplied registry to a Skill's permissions without adding tools."""
+    if skill is None or (not skill.allowed_tools and not skill.allowed_tools_explicit):
+        return available_tools
+
+    # Empty explicit lists disable tools. Non-empty programmatic lists also
+    # constrain permissions even when no frontmatter provenance was supplied.
+    for name in skill.allowed_tools:
+        if name not in available_tools:
+            raise ValueError(f"{skill.path}: unknown Tool {name!r}")
+    # A registry already resolved by the host needs no copy or reordering.
+    if tuple(available_tools) == skill.allowed_tools:
+        return available_tools
+    return {name: available_tools[name] for name in skill.allowed_tools}
 
 
 def parse_skill_file(path: Path, *, source: str = "user", editable: bool = True) -> Skill:

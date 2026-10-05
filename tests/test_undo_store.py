@@ -27,7 +27,10 @@ def test_create_creates_metadata_index_and_files_folder(tmp_path: Path) -> None:
     assert store.index_path.is_file()
     assert store.files_dir.is_dir()
     assert json.loads(store.index_path.read_text(encoding="utf-8")) == []
-    assert metadata["repo_root"] == str(tmp_path.resolve())
+    assert metadata["workspace_root"] == str(tmp_path.resolve())
+    assert set(metadata) == {
+        "created_at", "updated_at", "session_id", "status", "workspace_root",
+    }
     assert metadata["session_id"] == "session-1"
     assert metadata["status"] == "active"
     assert metadata["created_at"]
@@ -49,7 +52,7 @@ def test_create_replaces_previous_undo_folder(tmp_path: Path) -> None:
 def test_create_without_workspace_omits_application_metadata(tmp_path: Path) -> None:
     store = UndoStore.create(tmp_path / "undo")
 
-    assert "repo_root" not in read_metadata(store)
+    assert "workspace_root" not in read_metadata(store)
 
 
 def test_open_opens_existing_undo_folder(tmp_path: Path) -> None:

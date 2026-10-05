@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from squid_core.platform_context import PlatformContext
 from squid_core.skills import Skill
+from squid_core.tools.builtins import TOOLS
 
 
 @dataclass(frozen=True)
@@ -11,19 +12,10 @@ class PromptDefaults:
     """Small, explicit application prompt surface consumed by Core."""
 
     agent_name: str = "Agent"
-    system_prompt_intro: str = "You are an agent working on a user-authored task."
+    agent_identity: str = "You are an agent working on a user-authored task."
     baseline_policy: str = ""
     tool_usage_guidance: str = ""
     final_summary_requirements: str = ""
-
-
-VISIBLE_NARRATION_GUIDANCE = """
-## Visible action notes
-
-Prefer a brief natural note or narration before tool calls when useful.
-
-Say what you found, changed, or are checking next. Keep it short and do not restate the whole plan or explain obvious actions.
-""".strip()
 
 
 PROTECTED_RESPONSE_PROTOCOL = """
@@ -53,12 +45,12 @@ PROTECTED_RESPONSE_EXAMPLES = """
 
 Valid non-final response:
 
-I found the section I was looking for. I'm checking out the surrounding code before I change anything.
+I found the requested information. I am checking one remaining detail.
 [one or more independent tool calls]
 
 Valid final response:
 
-I Fixed the issue and ran the tests. Everything is green. Interactive behavior was not confirmed yet since I didn't have the browser available to me.
+The task is complete. I checked the requested information; one detail could not be independently verified.
 """.strip()
 
 
@@ -67,6 +59,8 @@ def prompt_section(
     default: str,
     skill: Skill | None = None,
 ) -> str:
+    """Apply a supported Skill section with literal append/replace semantics."""
+
     if skill is None:
         return default
 
@@ -95,6 +89,8 @@ def tool_usage_guidance(
 
 
 def skill_prompt_block(skill: Skill | None = None) -> str:
+    """Expose the selected Skill instructions without changing runtime protocol."""
+
     if skill is None:
         return ""
 
@@ -112,7 +108,11 @@ Skill instructions:
 def execution_environment_prompt(
     platform_context: PlatformContext,
     workspace: str,
+    tools: dict | None = None,
 ) -> str:
+    """Describe environment facts and only the active built-in tool capabilities."""
+
+    active_tools = TOOLS if tools is None else tools
     lines = [
         "## Execution Environment",
         "",
@@ -121,18 +121,20 @@ def execution_environment_prompt(
         f"Path separator: {platform_context.path_separator}",
         f"Workspace: {workspace}",
         "",
-        "Use commands, quoting, paths, and utilities valid for this environment.",
     ]
 
-    if platform_context.is_windows:
+    # Environment facts remain useful even when the agent cannot execute commands.
+    if "run_command" in active_tools:
+        lines.append("Use commands, quoting, paths, and utilities valid for this environment.")
+
+    if "run_command" in active_tools and platform_context.is_windows:
         lines.extend(
             [
                 "run_command already executes in PowerShell. Write PowerShell commands directly; do not wrap them in `powershell -Command`.",
                 "Use PowerShell syntax, paths, and commands, not Bash-only syntax.",
-                "Prefer dedicated file tools for source reading and editing. For shell discovery, use native commands such as Get-ChildItem and Select-String.",
             ]
         )
-    else:
+    elif "run_command" in active_tools:
         lines.extend(
             [
                 f"run_command executes using {platform_context.shell_name}. Write commands directly for that shell.",
@@ -140,6 +142,15 @@ def execution_environment_prompt(
                 "Do not assume Windows PowerShell commands or Windows path syntax are available.",
             ]
         )
+
+    # File preferences belong to the host; Core states only available capabilities.
+    for name, purpose in (
+        ("read_file", "reading files"),
+        ("apply_patch", "focused file edits"),
+        ("write_file", "writing files"),
+    ):
+        if name in active_tools:
+            lines.append(f"{name} is available for {purpose}.")
 
     return "\n".join(lines)
 
@@ -149,17 +160,19 @@ def system_prompt(
     skill: Skill | None = None,
     platform_context: PlatformContext | None = None,
     workspace: str | None = None,
+    tools: dict | None = None,
 ) -> str:
+    """Assemble host policy around the protected, task-neutral runtime protocol."""
     defaults = defaults or PromptDefaults()
 
-    intro = prompt_section(
-        "SYSTEM_PROMPT_INTRO",
-        defaults.system_prompt_intro,
+    identity = prompt_section(
+        "AGENT_IDENTITY",
+        defaults.agent_identity,
         skill,
     )
 
     environment = (
-        execution_environment_prompt(platform_context, workspace)
+        execution_environment_prompt(platform_context, workspace, tools)
         if platform_context is not None and workspace is not None
         else ""
     )
@@ -171,12 +184,11 @@ def system_prompt(
     )
 
     sections = [
-        intro,
+        identity,
         defaults.baseline_policy,
         environment,
         skill_prompt_block(skill),
         tool_usage_guidance(defaults.tool_usage_guidance, skill),
-        VISIBLE_NARRATION_GUIDANCE,
         PROTECTED_RESPONSE_PROTOCOL,
         PROTECTED_VERIFICATION_GUIDANCE,
         final_guidance,
@@ -208,6 +220,8 @@ Use one or more available tools with valid arguments for the immediate next step
 
 
 def correction_message(reason: str) -> str:
+    """Return task-neutral recovery instructions for an invalid model reply."""
+
     return CORRECTION_MESSAGES.get(
         reason,
         (

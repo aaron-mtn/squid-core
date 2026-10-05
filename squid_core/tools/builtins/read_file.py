@@ -120,7 +120,7 @@ def tool_definition() -> dict:
 
 
 def execute(
-    _repo_root: Path,
+    _workspace_root: Path,
     path: str,
     ranges: list[dict[str, int]] | None = None,
     pages: list[dict[str, int]] | None = None,

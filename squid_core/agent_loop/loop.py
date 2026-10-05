@@ -62,7 +62,7 @@ class AgentLoop:
 
     # Store the parts needed to run the loop.
     # The loop depends on the session, model adapter, tool executor,
-    # tool result formatter, coding agent behavior, display layer, and optional
+    # tool result formatter, agent behavior, display layer, and optional
     # durable session storage.
     def __init__(
         self,
@@ -214,7 +214,7 @@ class AgentLoop:
         return self.hook_runner.run_finished(
             RunFinishedContext(
                 session_id=self._session_id(),
-                repo_root=str(self.session.repo_root),
+                workspace_root=str(self.session.workspace_root),
                 status=status,
                 reason=reason,
                 final_message=final_message,
@@ -286,7 +286,7 @@ class AgentLoop:
         self.hook_runner.compaction_applied(
             CompactionAppliedContext(
                 session_id=self._session_id(),
-                repo_root=str(self.session.repo_root),
+                workspace_root=str(self.session.workspace_root),
             ),
             event_sink=self._emit_hook_event,
         )
@@ -566,7 +566,7 @@ class AgentLoop:
             self._emit_event(
                 {
                     "type": "run_started",
-                    "repo_root": str(self.session.repo_root),
+                    "workspace_root": str(self.session.workspace_root),
                     "task": getattr(self.agent, "task", ""),
                 }
             )
@@ -581,7 +581,7 @@ class AgentLoop:
             before_run = self.hook_runner.before_run(
                 BeforeRunContext(
                     session_id=self._session_id(),
-                    repo_root=str(self.session.repo_root),
+                    workspace_root=str(self.session.workspace_root),
                     task=getattr(self.agent, "task", ""),
                     skill_name=getattr(self.agent, "skill_name", None),
                     allowed_tools=self._allowed_tools_from_definitions(tool_definitions),
@@ -651,7 +651,7 @@ class AgentLoop:
                 turn_context = self.hook_runner.before_model_turn(
                     BeforeModelTurnContext(
                         session_id=self._session_id(),
-                        repo_root=str(self.session.repo_root),
+                        workspace_root=str(self.session.workspace_root),
                         task=getattr(self.agent, "task", ""),
                         messages=tuple(self.session.messages),
                         tool_steps_used=tool_steps_used,
@@ -680,9 +680,9 @@ class AgentLoop:
 
                 self.display.debug_reply(reply)
 
-                # Ask the coding agent whether this reply counts as a valid turn.
-                # Invalid replies include narration-only turns, malformed tool calls,
-                # wrong tool counts, and invalid finals.
+                # Ask the agent whether this reply counts as a valid turn.
+                # The default Agent rejects malformed tool calls and empty finals;
+                # injected agents own any additional validation policy.
                 validation = self.agent.validate_reply(reply)
 
                 # If the reply is invalid, do not store the assistant message in
@@ -742,7 +742,7 @@ class AgentLoop:
                     final_decision = self.hook_runner.before_accept_final(
                         BeforeAcceptFinalContext(
                             session_id=self._session_id(),
-                            repo_root=str(self.session.repo_root),
+                            workspace_root=str(self.session.workspace_root),
                             message=reply["message"],
                             content=assistant_content,
                             files_read=tuple(
@@ -887,7 +887,7 @@ class AgentLoop:
                     tool_decision = self.hook_runner.before_tool_execute(
                         BeforeToolExecuteContext(
                             session_id=self._session_id(),
-                            repo_root=str(self.session.repo_root),
+                            workspace_root=str(self.session.workspace_root),
                             action=action,
                             tool_steps_used=hook_tool_steps_used,
                         ),
@@ -945,7 +945,7 @@ class AgentLoop:
                     tool_result_response = self.hook_runner.tool_result(
                         ToolResultContext(
                             session_id=self._session_id(),
-                            repo_root=str(self.session.repo_root),
+                            workspace_root=str(self.session.workspace_root),
                             action=action,
                             result=result,
                         ),

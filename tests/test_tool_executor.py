@@ -65,8 +65,8 @@ def test_write_file_snapshots_target_before_write(tmp_path: Path) -> None:
     target.write_text("before", encoding="utf-8")
     undo_store = FakeUndoStore()
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -87,9 +87,9 @@ def test_successful_apply_patch_snapshots_and_records_file_written(tmp_path: Pat
     target = tmp_path / "target.txt"
     target.write_text("before", encoding="utf-8")
     undo_store = FakeUndoStore()
-    session = Session(repo_root=tmp_path)
+    session = Session(workspace_root=tmp_path)
     executor = ToolExecutor(
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
         session=session,
         undo_store=undo_store,
     )
@@ -111,7 +111,7 @@ def test_successful_apply_patch_snapshots_and_records_file_written(tmp_path: Pat
 def test_unique_apply_patch_remains_backward_compatible(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("before middle after", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
 
     result = _patch(executor, target, "middle", "center")
 
@@ -134,7 +134,7 @@ def test_duplicate_candidate_selection_edits_only_selected_occurrence(
 ) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
 
     diagnostic = _patch(executor, target, "same", "changed")
 
@@ -153,7 +153,7 @@ def test_duplicate_candidate_selection_edits_only_selected_occurrence(
 def test_candidate_selection_accepts_matching_redundant_path(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "stored replacement")
 
     result = executor.execute(
@@ -173,7 +173,7 @@ def test_candidate_selection_accepts_matching_redundant_path(tmp_path: Path) -> 
 def test_candidate_selection_ignores_redundant_patch_text(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "stored replacement")
 
     result = executor.execute(
@@ -202,7 +202,7 @@ def test_unusable_candidate_id_with_complete_normal_args_uses_exact_patch(
     undo_store = FakeUndoStore()
     executor = ToolExecutor(
         tmp_path,
-        Session(repo_root=tmp_path),
+        Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -230,7 +230,7 @@ def test_unusable_candidate_id_without_complete_normal_args_is_unavailable(
     tmp_path: Path,
     match_id: str,
 ) -> None:
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
 
     result = executor.execute(
         {"tool": "apply_patch", "args": {"match_id": match_id}}
@@ -249,7 +249,7 @@ def test_candidate_selection_rejects_conflicting_redundant_path(tmp_path: Path) 
     other = tmp_path / "other.txt"
     target.write_text("same different same", encoding="utf-8")
     other.write_text("untouched", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "stored replacement")
 
     result = executor.execute(
@@ -273,7 +273,7 @@ def test_close_match_candidate_replaces_exact_current_text(tmp_path: Path) -> No
     target = tmp_path / "target.txt"
     original = "header\nalpha = 1\nbeta = 20\ngamma = 3\nfooter\n"
     target.write_text(original, encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
 
     diagnostic = _patch(
         executor,
@@ -300,7 +300,7 @@ def test_close_match_candidate_replaces_exact_current_text(tmp_path: Path) -> No
 def test_low_confidence_close_match_does_not_create_candidate(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("one\ntwo\nthree\n", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
 
     result = _patch(executor, target, "completely\nunrelated", "replacement")
 
@@ -312,8 +312,8 @@ def test_low_confidence_close_match_does_not_create_candidate(tmp_path: Path) ->
 def test_unknown_and_other_run_candidate_ids_are_unavailable(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    first_run = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
-    second_run = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    first_run = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
+    second_run = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(first_run, target, "same", "changed")
 
     assert _select(first_run, "unknown")["error"] == "patch_candidate_unavailable"
@@ -325,7 +325,7 @@ def test_unknown_and_other_run_candidate_ids_are_unavailable(tmp_path: Path) -> 
 def test_successful_same_file_mutation_invalidates_candidates(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same middle same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "changed")
 
     successful = _patch(executor, target, "middle", "center")
@@ -339,7 +339,7 @@ def test_successful_same_file_mutation_invalidates_candidates(tmp_path: Path) ->
 def test_successful_same_file_write_invalidates_candidates(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "changed")
 
     written = executor.execute(
@@ -357,7 +357,7 @@ def test_different_file_mutation_preserves_candidates(tmp_path: Path) -> None:
     other = tmp_path / "other.txt"
     target.write_text("same different same", encoding="utf-8")
     other.write_text("before", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "changed")
 
     other_result = executor.execute(
@@ -373,7 +373,7 @@ def test_different_file_mutation_preserves_candidates(tmp_path: Path) -> None:
 def test_stale_candidate_is_rejected_at_original_location(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "changed")
     target.write_text("prefix same different same", encoding="utf-8")
 
@@ -386,7 +386,7 @@ def test_stale_candidate_is_rejected_at_original_location(tmp_path: Path) -> Non
 def test_candidate_is_stale_if_target_disappears(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("same different same", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "changed")
     target.unlink()
 
@@ -400,7 +400,7 @@ def test_failed_mutation_does_not_invalidate_unrelated_candidate(tmp_path: Path)
     other = tmp_path / "other.txt"
     target.write_text("same different same", encoding="utf-8")
     other.write_text("untouched", encoding="utf-8")
-    executor = ToolExecutor(tmp_path, Session(repo_root=tmp_path))
+    executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
     diagnostic = _patch(executor, target, "same", "changed")
 
     failed = _patch(executor, other, "missing", "replacement")
@@ -417,7 +417,7 @@ def test_candidate_selection_snapshots_original_target(tmp_path: Path) -> None:
     undo_store = FakeUndoStore()
     executor = ToolExecutor(
         tmp_path,
-        Session(repo_root=tmp_path),
+        Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
     diagnostic = _patch(executor, target, "same", "changed")
@@ -434,8 +434,8 @@ def test_successful_write_file_produces_usable_undo_state(tmp_path: Path) -> Non
     target.write_text("before", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -456,8 +456,8 @@ def test_failed_write_file_discards_new_undo_state(tmp_path: Path) -> None:
     target = tmp_path / "missing-parent" / "target.txt"
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -479,8 +479,8 @@ def test_successful_apply_patch_produces_usable_undo_state(tmp_path: Path) -> No
     target.write_text("before", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -502,8 +502,8 @@ def test_failed_apply_patch_discards_new_undo_state(tmp_path: Path) -> None:
     target.write_text("before", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -527,8 +527,8 @@ def test_failed_mutation_preserves_previous_successful_undo_state(tmp_path: Path
     unchanged.write_text("untouched", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -558,13 +558,13 @@ def test_mutation_exception_retains_snapshot_for_possible_partial_write(tmp_path
     target.write_text("before", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
 
-    def partially_write_then_raise(_repo_root: Path, **args) -> dict:
+    def partially_write_then_raise(_workspace_root: Path, **args) -> dict:
         Path(args["path"]).write_text("partial", encoding="utf-8")
         raise OSError("write interrupted")
 
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
         tools={"write_file": {"execute": partially_write_then_raise}},
     )
@@ -588,8 +588,8 @@ def test_read_file_and_run_command_do_not_snapshot(tmp_path: Path) -> None:
     target.write_text("content", encoding="utf-8")
     undo_store = FakeUndoStore()
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         undo_store=undo_store,
     )
 
@@ -621,8 +621,8 @@ def test_blocked_read_file_does_not_call_tool(monkeypatch, tmp_path: Path) -> No
     workspace.mkdir()
     calls = []
 
-    def fake_execute(repo_root: Path, **args) -> dict:
-        calls.append((repo_root, args))
+    def fake_execute(workspace_root: Path, **args) -> dict:
+        calls.append((workspace_root, args))
         return {"ok": True, "tool": "read_file", "path": args["path"]}
 
     monkeypatch.setattr(
@@ -631,8 +631,8 @@ def test_blocked_read_file_does_not_call_tool(monkeypatch, tmp_path: Path) -> No
         {"read_file": {"execute": fake_execute}},
     )
     executor = ToolExecutor(
-        repo_root=workspace,
-        session=Session(repo_root=workspace),
+        workspace_root=workspace,
+        session=Session(workspace_root=workspace),
     )
 
     result = executor.execute(
@@ -657,8 +657,8 @@ def test_blocked_write_file_does_not_snapshot_or_call_tool(
     undo_store = FakeUndoStore()
     calls = []
 
-    def fake_execute(repo_root: Path, **args) -> dict:
-        calls.append((repo_root, args))
+    def fake_execute(workspace_root: Path, **args) -> dict:
+        calls.append((workspace_root, args))
         return {"ok": True, "tool": "write_file", "path": args["path"]}
 
     monkeypatch.setattr(
@@ -667,8 +667,8 @@ def test_blocked_write_file_does_not_snapshot_or_call_tool(
         {"write_file": {"execute": fake_execute}},
     )
     executor = ToolExecutor(
-        repo_root=workspace,
-        session=Session(repo_root=workspace),
+        workspace_root=workspace,
+        session=Session(workspace_root=workspace),
         undo_store=undo_store,
     )
 
@@ -692,8 +692,8 @@ def test_apply_patch_respects_workspace_policy(monkeypatch, tmp_path: Path) -> N
     undo_store = FakeUndoStore()
     calls = []
 
-    def fake_execute(repo_root: Path, **args) -> dict:
-        calls.append((repo_root, args))
+    def fake_execute(workspace_root: Path, **args) -> dict:
+        calls.append((workspace_root, args))
         return {"ok": True, "tool": "apply_patch", "path": args["path"]}
 
     monkeypatch.setattr(
@@ -702,8 +702,8 @@ def test_apply_patch_respects_workspace_policy(monkeypatch, tmp_path: Path) -> N
         {"apply_patch": {"execute": fake_execute}},
     )
     executor = ToolExecutor(
-        repo_root=workspace,
-        session=Session(repo_root=workspace),
+        workspace_root=workspace,
+        session=Session(workspace_root=workspace),
         undo_store=undo_store,
     )
 
@@ -726,8 +726,8 @@ def test_run_command_is_not_restricted_by_workspace_boundary(
 ) -> None:
     calls = []
 
-    def fake_execute(repo_root: Path, **args) -> dict:
-        calls.append((repo_root, args))
+    def fake_execute(workspace_root: Path, **args) -> dict:
+        calls.append((workspace_root, args))
         return {"ok": True, "tool": "run_command", "command": args["command"]}
 
     monkeypatch.setattr(
@@ -736,8 +736,8 @@ def test_run_command_is_not_restricted_by_workspace_boundary(
         {"run_command": {"execute": fake_execute}},
     )
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
     )
 
     result = executor.execute(
@@ -755,18 +755,18 @@ def test_only_builtin_run_command_receives_platform_context(monkeypatch, tmp_pat
     context = PlatformContext("Windows", "PowerShell", "pwsh", "\\", True)
     calls = []
 
-    def builtin_command(repo_root: Path, **args) -> dict:
+    def builtin_command(workspace_root: Path, **args) -> dict:
         calls.append(("command", args))
         return {"ok": True, "tool": "run_command"}
 
-    def other_tool(repo_root: Path, **args) -> dict:
+    def other_tool(workspace_root: Path, **args) -> dict:
         calls.append(("other", args))
         return {"ok": True, "tool": "other"}
 
     monkeypatch.setattr(tool_executor_module, "BUILTIN_RUN_COMMAND", builtin_command)
     executor = ToolExecutor(
-        repo_root=tmp_path,
-        session=Session(repo_root=tmp_path),
+        workspace_root=tmp_path,
+        session=Session(workspace_root=tmp_path),
         tools={
             "run_command": {"execute": builtin_command},
             "other": {"execute": other_tool},
@@ -794,8 +794,8 @@ def test_allow_outside_workspace_allows_outside_file_paths_through(
     workspace.mkdir()
     calls = []
 
-    def fake_execute(repo_root: Path, **args) -> dict:
-        calls.append((repo_root, args))
+    def fake_execute(workspace_root: Path, **args) -> dict:
+        calls.append((workspace_root, args))
         return {"ok": True, "path": args["path"]}
 
     monkeypatch.setattr(
@@ -808,8 +808,8 @@ def test_allow_outside_workspace_allows_outside_file_paths_through(
         },
     )
     executor = ToolExecutor(
-        repo_root=workspace,
-        session=Session(repo_root=workspace),
+        workspace_root=workspace,
+        session=Session(workspace_root=workspace),
         allow_outside_workspace=True,
     )
 
@@ -851,8 +851,8 @@ def test_workspace_boundary_approval_allows_outside_file_path_through(
     workspace.mkdir()
     calls = []
 
-    def fake_execute(repo_root: Path, **args) -> dict:
-        calls.append((repo_root, args))
+    def fake_execute(workspace_root: Path, **args) -> dict:
+        calls.append((workspace_root, args))
         return {"ok": True, "tool": "read_file", "path": args["path"]}
 
     monkeypatch.setattr(
@@ -861,8 +861,8 @@ def test_workspace_boundary_approval_allows_outside_file_path_through(
         {"read_file": {"execute": fake_execute}},
     )
     executor = ToolExecutor(
-        repo_root=workspace,
-        session=Session(repo_root=workspace),
+        workspace_root=workspace,
+        session=Session(workspace_root=workspace),
     )
 
     result = executor.execute(

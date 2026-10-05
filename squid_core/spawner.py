@@ -22,7 +22,9 @@ from squid_core.model_adapter import ModelAdapter
 from squid_core.platform_context import PlatformContext, detect_platform_context
 from squid_core.session import Session
 from squid_core.settings import RuntimeSettings
+from squid_core.skills import select_skill_tools
 from squid_core.tools import ToolExecutor, ToolResults
+from squid_core.tools.builtins import TOOLS
 from squid_core.agent import Agent
 from squid_core.storage import SessionStore, UndoStore
 
@@ -105,7 +107,7 @@ def _wire_model_view_observer(model_adapter, session_store: SessionStore) -> Non
 
 
 def run_agent_task(
-    repo_root: Path | str,
+    workspace_root: Path | str,
     task: str,
     *,
     settings: RuntimeSettings,
@@ -113,13 +115,13 @@ def run_agent_task(
 ) -> RunResult:
     """Build and run a generic task with optional selective replacements."""
 
-    run = build_agent_run(repo_root, task, settings=settings, **kwargs)
+    run = build_agent_run(workspace_root, task, settings=settings, **kwargs)
     run.loop.display.run_started()
     return run.loop.run()
 
 
 def build_agent_run(
-    repo_root: Path | str,
+    workspace_root: Path | str,
     task: str,
     *,
     settings: RuntimeSettings,
@@ -154,6 +156,9 @@ def build_agent_run(
 ) -> AgentRun:
     """Construct a generic run without application discovery or terminal UI.
 
+    ``tools=None`` uses Core built-ins; ``tools={}`` disables tools, and an
+    explicit mapping is used without merging. A Skill can further restrict it;
+    an already permitted registry is preserved without copying.
     Supplied high-level collaborators are used directly.  In particular, a
     supplied model adapter bypasses adapter construction and a supplied tool
     executor bypasses default undo-store and executor construction.
@@ -168,11 +173,11 @@ def build_agent_run(
     if undo_store is not None and undo_store_factory is not None:
         raise ValueError("undo_store and undo_store_factory are mutually exclusive")
 
-    repo_root = Path(repo_root).resolve()
-    session = session if session is not None else Session(repo_root=repo_root)
+    workspace_root = Path(workspace_root).resolve()
+    session = session if session is not None else Session(workspace_root=workspace_root)
     if session_store is None:
         if session_store_factory is not None:
-            session_store = session_store_factory(repo_root, task)
+            session_store = session_store_factory(workspace_root, task)
         else:
             if sessions_dir is None:
                 raise ValueError(
@@ -182,12 +187,12 @@ def build_agent_run(
             session_store = SessionStore.create(
                 sessions_dir,
                 task,
-                workspace_root=repo_root,
+                workspace_root=workspace_root,
             )
 
     if undo_store is None and tool_executor is None:
         if undo_store_factory is not None:
-            undo_store = undo_store_factory(repo_root, session_store.session_id)
+            undo_store = undo_store_factory(workspace_root, session_store.session_id)
         else:
             if undo_dir is None:
                 raise ValueError(
@@ -196,12 +201,13 @@ def build_agent_run(
             undo_store = UndoStore.create(
                 undo_dir,
                 session_store.session_id,
-                workspace_root=repo_root,
+                workspace_root=workspace_root,
             )
     elif undo_store is None and undo_store_factory is not None:
-        undo_store = undo_store_factory(repo_root, session_store.session_id)
+        undo_store = undo_store_factory(workspace_root, session_store.session_id)
 
-    selected_tools = {} if tools is None else tools
+    # None selects built-ins; an empty or custom registry is caller-owned.
+    selected_tools = select_skill_tools(skill, TOOLS if tools is None else tools)
     needs_platform = agent is None or tool_executor is None
     if platform_context is None and needs_platform:
         platform_context = detect_platform_context()
@@ -211,12 +217,12 @@ def build_agent_run(
             skill=skill,
             tools=selected_tools,
             platform_context=platform_context,
-            workspace=str(repo_root),
+            workspace=str(workspace_root),
             prompt_defaults=prompt_defaults,
         )
 
     loop = build_agent_loop(
-        repo_root=repo_root,
+        workspace_root=workspace_root,
         session=session,
         session_store=session_store,
         undo_store=undo_store,
@@ -245,7 +251,7 @@ def build_agent_run(
 
 
 def build_agent_loop(
-    repo_root: Path,
+    workspace_root: Path,
     session: Session,
     session_store: SessionStore,
     agent,
@@ -277,8 +283,11 @@ def build_agent_loop(
     controls replay. The caller chooses these values, independently of settings.
     """
 
-    repo_root = Path(repo_root).resolve()
+    workspace_root = Path(workspace_root).resolve()
     display = NullDisplay() if display is None else display
+    # Apply the same Skill permissions to execution as to model exposure, even
+    # for callers using this lower-level construction helper directly.
+    tools = select_skill_tools(getattr(agent, "skill", None), TOOLS if tools is None else tools)
     if model_adapter is None:
         # Backend selection and replay policy belong to the embedding application.
         # Runtime settings deliberately contain no provider configuration.
@@ -307,11 +316,11 @@ def build_agent_loop(
     _wire_model_view_observer(model_adapter, session_store)
     if tool_executor is None:
         tool_executor = ToolExecutor(
-            repo_root=repo_root,
+            workspace_root=workspace_root,
             session=session,
             undo_store=undo_store,
             allow_outside_workspace=settings.approval_mode == "never",
-            tools={} if tools is None else tools,
+            tools=tools,
             platform_context=platform_context,
             read_file_settings=settings.read_file,
             snapshot_asset=session_store.snapshot_asset,
@@ -328,7 +337,7 @@ def build_agent_loop(
         )
     if action_preflight is None:
         action_preflight = ActionPreflight(
-            workspace_root=repo_root,
+            workspace_root=workspace_root,
         )
     if hook_runner is None:
         hook_runner = HookRunner()

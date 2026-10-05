@@ -1,7 +1,7 @@
 """Generic Core Agent behavior."""
 
 from squid_core.platform_context import PlatformContext
-from squid_core.skills import Skill
+from squid_core.skills import Skill, select_skill_tools
 from squid_core.agent.prompts import PromptDefaults, correction_message, system_prompt
 from squid_core.tools.builtins import TOOLS
 
@@ -27,7 +27,7 @@ class Agent:
         self.task = task
         self.skill = skill
         self.skill_name = skill.name if skill is not None else None
-        self.tools = TOOLS if tools is None else tools
+        self.tools = select_skill_tools(skill, TOOLS if tools is None else tools)
         self.platform_context = platform_context
         self.workspace = workspace
         self.prompt_defaults = prompt_defaults or PromptDefaults()
@@ -41,6 +41,7 @@ class Agent:
                     self.skill,
                     self.platform_context,
                     self.workspace,
+                    tools=self.tools,
                 ),
             },
             {"role": "user", "content": self.task},

@@ -65,7 +65,12 @@ def test_create_writes_initial_metadata_and_empty_jsonl(tmp_path: Path) -> None:
     )
     assert metadata["status"] == "active"
     assert metadata["task"] == "Fix Formatter Underscore Bug"
-    assert metadata["repo_root"] == str(tmp_path.resolve())
+    assert metadata["workspace_root"] == str(tmp_path.resolve())
+    assert set(metadata) == {
+        "session_id", "created_at", "updated_at", "task", "status",
+        "active_leaf_id", "workspace_root",
+    }
+    assert read_metadata(SessionStore.open(store.session_dir))["workspace_root"] == str(tmp_path.resolve())
     assert metadata["session_id"]
     assert metadata["active_leaf_id"] is None
 
@@ -647,7 +652,7 @@ def test_append_run_context_persists_optional_mod_id(tmp_path: Path) -> None:
 def test_create_without_workspace_omits_application_metadata(tmp_path: Path) -> None:
     store = SessionStore.create(tmp_path / "sessions", "Generic session")
 
-    assert "repo_root" not in read_metadata(store)
+    assert "workspace_root" not in read_metadata(store)
 
 
 def test_create_does_not_register_a_code_squid_global_index(

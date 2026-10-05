@@ -24,7 +24,7 @@ class ActionPreflight:
     @classmethod
     def from_runtime(cls, tool_executor, _approval_policy) -> "ActionPreflight":
         return cls(
-            workspace_root=getattr(tool_executor, "repo_root", None),
+            workspace_root=getattr(tool_executor, "workspace_root", None),
         )
 
     def check(

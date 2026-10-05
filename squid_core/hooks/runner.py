@@ -19,7 +19,7 @@ class PromptContextBlock:
 @dataclass(frozen=True)
 class BeforeRunContext:
     session_id: str | None
-    repo_root: str
+    workspace_root: str
     task: str
     skill_name: str | None = None
     allowed_tools: tuple[str, ...] = ()
@@ -28,7 +28,7 @@ class BeforeRunContext:
 @dataclass(frozen=True)
 class BeforeModelTurnContext:
     session_id: str | None
-    repo_root: str
+    workspace_root: str
     task: str
     messages: tuple[dict[str, Any], ...]
     tool_steps_used: int
@@ -39,7 +39,7 @@ class CompactionAppliedContext:
     """Identify a session whose model-visible transcript was compacted."""
 
     session_id: str | None
-    repo_root: str
+    workspace_root: str
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class ReadResultTrimmedContext:
 @dataclass(frozen=True)
 class BeforeToolExecuteContext:
     session_id: str | None
-    repo_root: str
+    workspace_root: str
     action: dict[str, Any]
     tool_steps_used: int
 
@@ -62,7 +62,7 @@ class BeforeToolExecuteContext:
 @dataclass(frozen=True)
 class ToolResultContext:
     session_id: str | None
-    repo_root: str
+    workspace_root: str
     action: dict[str, Any]
     result: dict[str, Any]
 
@@ -70,7 +70,7 @@ class ToolResultContext:
 @dataclass(frozen=True)
 class BeforeAcceptFinalContext:
     session_id: str | None
-    repo_root: str
+    workspace_root: str
     message: dict[str, Any]
     content: str
     files_read: tuple[str, ...] = ()
@@ -89,7 +89,7 @@ class FollowUpRunRequest:
 @dataclass(frozen=True)
 class RunFinishedContext:
     session_id: str | None
-    repo_root: str
+    workspace_root: str
     status: str
     reason: str = ""
     final_message: str = ""
@@ -221,7 +221,7 @@ class HookRunner:
                 handler,
                 BeforeToolExecuteContext(
                     session_id=ctx.session_id,
-                    repo_root=ctx.repo_root,
+                    workspace_root=ctx.workspace_root,
                     action=action,
                     tool_steps_used=ctx.tool_steps_used,
                 ),
@@ -272,7 +272,7 @@ class HookRunner:
                 handler,
                 ToolResultContext(
                     session_id=ctx.session_id,
-                    repo_root=ctx.repo_root,
+                    workspace_root=ctx.workspace_root,
                     action=ctx.action,
                     result=result,
                 ),

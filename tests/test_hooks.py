@@ -169,7 +169,7 @@ def build_loop(
     agent=None,
     should_cancel=None,
 ):
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     model_adapter = FakeModelAdapter(model_reply)
     session_store = FakeSessionStore()
     tool_executor = FakeToolExecutor()
@@ -189,7 +189,7 @@ def build_loop(
 
 
 def build_loop_with_model(model_adapter, hook_runner=None, on_event=None, agent=None):
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session_store = FakeSessionStore()
     tool_executor = FakeToolExecutor()
     loop = AgentLoop(
@@ -210,12 +210,12 @@ def test_hook_runner_noop_returns_empty_decisions() -> None:
     runner = HookRunner()
 
     before_run = runner.before_run(
-        BeforeRunContext(session_id=None, repo_root="", task="")
+        BeforeRunContext(session_id=None, workspace_root="", task="")
     )
     before_model_turn = runner.before_model_turn(
         BeforeModelTurnContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             task="",
             messages=(),
             tool_steps_used=0,
@@ -224,7 +224,7 @@ def test_hook_runner_noop_returns_empty_decisions() -> None:
     before_tool_execute = runner.before_tool_execute(
         BeforeToolExecuteContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             action={"tool": "read_file"},
             tool_steps_used=0,
         )
@@ -232,16 +232,16 @@ def test_hook_runner_noop_returns_empty_decisions() -> None:
     before_accept_final = runner.before_accept_final(
         BeforeAcceptFinalContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             message={"role": "assistant", "content": "done"},
             content="done",
         )
     )
     run_finished = runner.run_finished(
-        RunFinishedContext(session_id=None, repo_root="", status="complete")
+        RunFinishedContext(session_id=None, workspace_root="", status="complete")
     )
     compaction_applied = runner.compaction_applied(
-        CompactionAppliedContext(session_id=None, repo_root="")
+        CompactionAppliedContext(session_id=None, workspace_root="")
     )
 
     assert before_run == HookResponse()
@@ -422,7 +422,7 @@ def test_run_finished_aggregates_follow_ups_and_notes_in_hook_order() -> None:
             )
 
     decision = HookRunner([FirstHook(), NoopHook(), SecondHook()]).run_finished(
-        RunFinishedContext(session_id=None, repo_root="", status="complete")
+        RunFinishedContext(session_id=None, workspace_root="", status="complete")
     )
 
     assert decision.follow_up_requests == (first_request, second_request)
@@ -455,7 +455,7 @@ def test_before_accept_final_block_stops_later_hooks() -> None:
     decision = HookRunner([NoteHook(), BlockingHook(), LaterHook()]).before_accept_final(
         BeforeAcceptFinalContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             message={"role": "assistant", "content": "done"},
             content="done",
         )
@@ -947,7 +947,7 @@ def test_before_tool_execute_mutation_chains_to_later_hooks() -> None:
     decision = HookRunner([MutatingHook(), SeeingHook()]).before_tool_execute(
         BeforeToolExecuteContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             action={"tool": "read_file", "args": {"path": "original.txt"}},
             tool_steps_used=0,
         )
@@ -988,7 +988,7 @@ def test_before_tool_execute_block_stops_later_hooks() -> None:
     decision = HookRunner([MutatingHook(), BlockingHook(), LaterHook()]).before_tool_execute(
         BeforeToolExecuteContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             action={"tool": "read_file", "tool_call_id": "call_1"},
             tool_steps_used=0,
         )
@@ -1020,7 +1020,7 @@ def test_tool_result_mutation_chains_to_later_hooks() -> None:
     result = HookRunner([FirstHook(), SecondHook()]).tool_result(
         ToolResultContext(
             session_id=None,
-            repo_root="",
+            workspace_root="",
             action={"tool": "read_file"},
             result={"ok": True},
         )

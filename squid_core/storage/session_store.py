@@ -99,7 +99,7 @@ class SessionStore:
         if workspace_root is not None:
             # The host may retain workspace identity for viewers without Core
             # needing to know where that host stores sessions.
-            metadata["repo_root"] = str(Path(workspace_root).resolve())
+            metadata["workspace_root"] = str(Path(workspace_root).resolve())
 
         # Write the initial metadata, append-only logs, and derived readable view.
         store = cls(session_dir)

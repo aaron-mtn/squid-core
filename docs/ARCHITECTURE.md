@@ -54,3 +54,71 @@ latter with retained source ranges. These seams support host observations of
 model-visible context independently of any built-in coverage policy. Hook
 registration order, context/result transformations, transient guidance and
 finalization/follow-up contracts are unchanged.
+
+
+Core prompt and tool selection
+------------------------------
+
+`Agent`, `ToolExecutor`, `build_agent_run`, and `build_agent_loop` use Core's
+built-in `TOOLS` registry for `tools=None`. An empty mapping disables tools;
+an explicit mapping is used without merging. `Agent` and the construction
+helpers restrict that mapping to the selected Skill's permitted tools. An
+already permitted registry is retained without copying.
+Injected agents and executors remain caller-owned collaborators. Default run
+construction shares the resolved registry between its Agent and executor.
+
+`Skill.allowed_tools` governs standalone and Mod Skills alike. Missing
+`allowed-tools` retains the supplied/default registry; explicit `allowed-tools: []`
+permits no tools; a non-empty list permits only those named tools in the
+supplied registry. Unavailable names raise a validation error, never cause
+implicit addition of Core tools. Programmatic non-empty Skill lists also
+constrain tools even when `allowed_tools_explicit` is false. Mod Skills continue
+to require explicit lists and validate every packaged profile before selection.
+
+Mod discovery, loading, validation, and resolution accept `built_in_tools`.
+`None` selects Core's registry; an empty or app-specific registry is used as
+supplied in every phase. Protected host tools precede loose resources; Mod-local
+tools/hooks precede standalone resources. Skills remain package-local. These
+resource precedence and activation rules are unchanged.
+
+Generic APIs, Session/ToolExecutor attributes, Hook contexts, saved-tool execution
+contexts, and run-started events call the filesystem working root
+`workspace_root`. It need not contain Git metadata. This pre-release rename
+uses `workspace_root` consistently in APIs, contexts, events, and persisted
+session/undo metadata. Consumers must use that keyword and metadata key;
+positional calls retain their order. Undo restore validates the recorded
+`workspace_root` against the current workspace before any mutation. The undo
+index still stores file paths and snapshot records, with no root field.
+No legacy aliases, fallback reads, dual writes, or storage migration exist;
+older development metadata may be incompatible. Filesystem layout, containment,
+session replay, and undo lifecycle behavior are unchanged.
+
+`PromptDefaults.agent_identity` supplies the identity override default. The
+three fixed Skill/Mod prompt sections are `AGENT_IDENTITY`,
+`TOOL_USAGE_GUIDANCE`, and `FINAL_SUMMARY_REQUIREMENTS`; each supports literal
+`append` and `replace`. This pre-release rename replaces `SYSTEM_PROMPT_INTRO`
+and `PromptDefaults.system_prompt_intro` directly, without compatibility aliases.
+Current resources and consumers must use the new names.
+
+Core protects only the tool-call versus non-empty final-response protocol,
+batching and result-dependent sequencing, finishing on completion, generic
+verification honesty, task-neutral protocol examples, and malformed/empty reply
+correction. It assembles host identity, baseline policy, Skill instructions,
+overrideable guidance, and environment facts without importing the host.
+Narration style, source-reading and editing preferences, final report style,
+and coding examples belong to `code_squid/agent/prompts.py` in Code Squid.
+Code Squid keeps narration, coding examples, and moved source/shell-discovery
+preferences in its non-replaceable baseline policy alongside its coding discipline; tool and final-report guidance keep
+existing Skill override behavior.
+
+`Agent.initial_messages` passes its resolved active registry to prompt assembly.
+The environment block retains OS, preferred shell, path separator, and workspace
+facts. Generic command-environment and platform-specific shell execution
+guidance appear only with `run_command`; capability
+notes for `read_file`, `apply_patch`, and `write_file` appear only with those
+tools. Core states available capabilities; the application chooses preferences.
+
+Text/spreadsheet omission markers and request-only trimmed source/content
+markers use `SQUID CORE` wording. Producers and omission-marker recognition
+share the new prefix. Old branded omission markers are not recognized as the
+current internal marker format; persisted original tool results are not rewritten.

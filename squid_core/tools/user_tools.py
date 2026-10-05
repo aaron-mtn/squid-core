@@ -70,13 +70,13 @@ def discover_user_tools(
 def build_user_tool_registry(
     *,
     app_home: Path | str | None = None,
-    repo_root: Path | str | None = None,
+    workspace_root: Path | str | None = None,
     session_id: str | None = None,
 ) -> dict[str, dict]:
     """Return executable registry entries for discovered user tools."""
     return build_user_tool_registry_from_metadata(
         discover_user_tools(app_home=app_home),
-        repo_root=repo_root,
+        workspace_root=workspace_root,
         session_id=session_id,
     )
 
@@ -84,7 +84,7 @@ def build_user_tool_registry(
 def build_user_tool_registry_from_metadata(
     user_tools: dict[str, UserTool],
     *,
-    repo_root: Path | str | None = None,
+    workspace_root: Path | str | None = None,
     session_id: str | None = None,
 ) -> dict[str, dict]:
     """Build executable registry entries from explicitly selected metadata.
@@ -93,9 +93,9 @@ def build_user_tool_registry_from_metadata(
     selected exact tool components. Constructing the registry stays lazy and
     does not import tool source; source is imported by ``execute_user_tool``.
     """
-    repo_root = None if repo_root is None else Path(repo_root)
+    workspace_root = None if workspace_root is None else Path(workspace_root)
     return {
-        name: _registry_entry(tool, repo_root=repo_root, session_id=session_id)
+        name: _registry_entry(tool, workspace_root=workspace_root, session_id=session_id)
         for name, tool in user_tools.items()
     }
 
@@ -190,13 +190,13 @@ def _parse_metadata_file(path: Path) -> dict[str, Any]:
 def _registry_entry(
     tool: UserTool,
     *,
-    repo_root: Path | None,
+    workspace_root: Path | None,
     session_id: str | None,
 ) -> dict:
     return {
-        "execute": lambda current_repo_root, **args: execute_user_tool(
+        "execute": lambda current_workspace_root, **args: execute_user_tool(
             tool,
-            current_repo_root if repo_root is None else repo_root,
+            current_workspace_root if workspace_root is None else workspace_root,
             args,
             session_id=session_id,
         ),
@@ -219,7 +219,7 @@ def user_tool_definition(tool: UserTool) -> dict:
 
 def execute_user_tool(
     tool: UserTool,
-    repo_root: Path | str,
+    workspace_root: Path | str,
     args: dict[str, Any],
     *,
     session_id: str | None = None,
@@ -234,7 +234,7 @@ def execute_user_tool(
             return _error_result(tool.name, f"Function not found: {tool.function}")
 
         context = {
-            "repo_root": str(Path(repo_root)),
+            "workspace_root": str(Path(workspace_root)),
             "tool_name": tool.name,
         }
         if session_id:

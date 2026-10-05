@@ -353,7 +353,7 @@ def _format_read_result(
         if isinstance(content, str) and content:
             lines.extend(("", "<<< CONTENT >>>", content))
         elif was_trimmed:
-            lines.extend(("", "<<< CODE SQUID CONTENT OMITTED FROM OLDER RESULT >>>"))
+            lines.extend(("", "<<< SQUID CORE CONTENT OMITTED FROM OLDER RESULT >>>"))
         return "\n".join(lines).rstrip()
 
     source_regions = _source_regions(source_result, visible_ranges)
@@ -382,16 +382,16 @@ def _format_read_result(
         lines.append("")
         if kind == "source":
             lines.append(
-                f"<<< CODE SQUID SOURCE: {filename} lines {start}-{end} >>>"
+                f"<<< SQUID CORE SOURCE: {filename} lines {start}-{end} >>>"
             )
             lines.append(payload or "")
         else:
             lines.append(
-                f"<<< CODE SQUID OMITTED: {filename} lines {start}-{end}{payload or ''} >>>"
+                f"<<< SQUID CORE OMITTED: {filename} lines {start}-{end}{payload or ''} >>>"
             )
 
     if not source_regions and was_trimmed:
-        lines.extend(("", "<<< CODE SQUID SOURCE OMITTED FROM OLDER RESULT >>>"))
+        lines.extend(("", "<<< SQUID CORE SOURCE OMITTED FROM OLDER RESULT >>>"))
     return "\n".join(lines).rstrip()
 
 
@@ -483,7 +483,7 @@ def _read_content_segments(
     for start, end in ranges:
         if previous_end is not None and start > previous_end + 1:
             expected = (
-                f"<<< CODE SQUID: lines {previous_end + 1}-{start - 1} "
+                f"<<< SQUID CORE: lines {previous_end + 1}-{start - 1} "
                 "omitted from this read >>>"
             )
             if offset >= len(lines) or lines[offset].rstrip("\r\n") != expected:
@@ -674,7 +674,7 @@ def _retained_read_ranges(result: dict, limit: int) -> list[tuple[int, int]]:
 
     payload_lines = content.splitlines(keepends=True)
     has_gap_markers = any(
-        line.startswith("<<< CODE SQUID: lines ")
+        line.startswith("<<< SQUID CORE: lines ")
         and line.rstrip().endswith("omitted from this read >>>")
         for line in payload_lines
     )

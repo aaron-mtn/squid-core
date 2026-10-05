@@ -148,7 +148,7 @@ def test_newest_results_are_textual_without_changing_pairing() -> None:
 
     assert rendered[-3]["content"] == (
         "READ_FILE OK\npath: C:/repo/new.py\n\n"
-        "<<< CODE SQUID SOURCE: new.py lines 7-8 >>>\nalpha\nbeta"
+        "<<< SQUID CORE SOURCE: new.py lines 7-8 >>>\nalpha\nbeta"
     )
     assert rendered[-1]["content"].startswith("RUN_COMMAND OK\n\n<<< OUTPUT >>>")
     assert rendered[-1]["tool_call_id"] == messages[-1]["tool_call_id"]
@@ -342,7 +342,7 @@ def test_failed_batch_keeps_skipped_pairing_without_payload_expansion() -> None:
 def test_disjoint_read_regions_have_exact_headers_and_gap_marker() -> None:
     result = _read_result(
         "C:/repo/script.js",
-        "one\ntwo\n<<< CODE SQUID: lines 3-7 omitted from this read >>>\neight\nnine\n",
+        "one\ntwo\n<<< SQUID CORE: lines 3-7 omitted from this read >>>\neight\nnine\n",
         start_line=1,
         end_line=9,
         returned_line_ranges=[
@@ -358,9 +358,9 @@ def test_disjoint_read_regions_have_exact_headers_and_gap_marker() -> None:
         )[-1]
     )
 
-    assert "<<< CODE SQUID SOURCE: script.js lines 1-2 >>>\none\ntwo" in observation
-    assert "<<< CODE SQUID OMITTED: script.js lines 3-7 >>>" in observation
-    assert "<<< CODE SQUID SOURCE: script.js lines 8-9 >>>\neight\nnine" in observation
+    assert "<<< SQUID CORE SOURCE: script.js lines 1-2 >>>\none\ntwo" in observation
+    assert "<<< SQUID CORE OMITTED: script.js lines 3-7 >>>" in observation
+    assert "<<< SQUID CORE SOURCE: script.js lines 8-9 >>>\neight\nnine" in observation
 
 
 def test_contiguous_read_does_not_gain_a_fake_gap_marker() -> None:
@@ -378,8 +378,8 @@ def test_contiguous_read_does_not_gain_a_fake_gap_marker() -> None:
         )[-1]
     )
 
-    assert "<<< CODE SQUID SOURCE: script.js lines 4-6 >>>" in observation
-    assert "CODE SQUID OMITTED" not in observation
+    assert "<<< SQUID CORE SOURCE: script.js lines 4-6 >>>" in observation
+    assert "SQUID CORE OMITTED" not in observation
 
 
 def test_partial_and_suppressed_reads_are_clear_text_observations() -> None:
@@ -422,10 +422,10 @@ def test_partial_and_suppressed_reads_are_clear_text_observations() -> None:
 
     assert partial_observation.startswith("READ_FILE PARTIAL")
     assert (
-        "<<< CODE SQUID OMITTED: script.js lines 420-500 already available unchanged >>>"
+        "<<< SQUID CORE OMITTED: script.js lines 420-500 already available unchanged >>>"
         in partial_observation
     )
-    assert "<<< CODE SQUID SOURCE: script.js lines 501-501 >>>\nfresh" in partial_observation
+    assert "<<< SQUID CORE SOURCE: script.js lines 501-501 >>>\nfresh" in partial_observation
     assert skipped_observation.startswith("READ_FILE SKIPPED")
     assert "lines: 420-620" in skipped_observation
     assert "reason: unchanged source already available in context" in skipped_observation
@@ -487,9 +487,9 @@ def test_old_read_content_is_bounded_with_exact_source_identity() -> None:
     observation = _observation(rendered[-2])
 
     assert observation.startswith("READ_FILE OK\npath: C:/repo/example.py\ntruncated: yes")
-    assert "<<< CODE SQUID SOURCE: example.py lines 1-1 >>>\nline 01" in observation
-    assert "<<< CODE SQUID SOURCE: example.py lines 20-20 >>>\nline 20" in observation
-    assert "<<< CODE SQUID OMITTED: example.py lines 2-19 older result content trimmed >>>" in observation
+    assert "<<< SQUID CORE SOURCE: example.py lines 1-1 >>>\nline 01" in observation
+    assert "<<< SQUID CORE SOURCE: example.py lines 20-20 >>>\nline 20" in observation
+    assert "<<< SQUID CORE OMITTED: example.py lines 2-19 older result content trimmed >>>" in observation
     assert canonical_result["content"] == content
 
 
@@ -714,7 +714,7 @@ def test_agent_loop_sends_trimmed_view_but_keeps_session_history_canonical() -> 
 
     adapter = RecordingAdapter()
     loop = AgentLoop(
-        session=SimpleNamespace(messages=messages, repo_root="C:/repo"),
+        session=SimpleNamespace(messages=messages, workspace_root="C:/repo"),
         model_adapter=adapter,
         tool_executor=object(),
         tool_results=ToolResults(),
@@ -758,7 +758,7 @@ def test_agent_loop_sends_complete_recent_range_less_read_to_adapter() -> None:
 
     adapter = RecordingAdapter()
     loop = AgentLoop(
-        session=SimpleNamespace(messages=messages, repo_root="C:/repo"),
+        session=SimpleNamespace(messages=messages, workspace_root="C:/repo"),
         model_adapter=adapter,
         tool_executor=object(),
         tool_results=ToolResults(),
@@ -803,7 +803,7 @@ def test_agent_loop_exposes_entire_just_completed_batch_once() -> None:
 
     adapter = RecordingAdapter()
     loop = AgentLoop(
-        session=SimpleNamespace(messages=messages, repo_root="C:/repo"),
+        session=SimpleNamespace(messages=messages, workspace_root="C:/repo"),
         model_adapter=adapter,
         tool_executor=object(),
         tool_results=ToolResults(),
@@ -838,7 +838,7 @@ def test_disabled_trimming_still_uses_textual_model_format() -> None:
 
     assert rendered[0] == messages[0]
     assert rendered[-1]["content"].endswith(
-        "<<< CODE SQUID SOURCE: full.py lines 1-1 >>>\nfull source"
+        "<<< SQUID CORE SOURCE: full.py lines 1-1 >>>\nfull source"
     )
 
 

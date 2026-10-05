@@ -323,3 +323,38 @@ Nope.
         assert "unsupported prompt section override mode: overwrite" in str(error)
     else:
         raise AssertionError("Expected unsupported prompt section mode to fail")
+
+
+@pytest.mark.parametrize("mode", ["append", "replace"])
+def test_agent_identity_override_parses(tmp_path: Path, mode: str) -> None:
+    path = _write_skill(tmp_path / "SKILL.md", f"""---
+name: custom
+description: Custom identity.
+---
+
+## AGENT_IDENTITY {mode}
+
+Custom identity.
+""")
+    skill = parse_skill_file(path)
+    assert skill.prompt_sections["AGENT_IDENTITY"].mode == mode
+    assert skill.prompt_sections["AGENT_IDENTITY"].content == "Custom identity."
+
+
+def test_fixed_section_contract_has_no_legacy_alias(tmp_path: Path) -> None:
+    from squid_core.skills import SUPPORTED_PROMPT_SECTIONS
+
+    assert SUPPORTED_PROMPT_SECTIONS == {
+        "AGENT_IDENTITY", "TOOL_USAGE_GUIDANCE", "FINAL_SUMMARY_REQUIREMENTS",
+    }
+    path = _write_skill(tmp_path / "SKILL.md", """---
+name: legacy
+description: Legacy identity.
+---
+
+## SYSTEM_PROMPT_INTRO replace
+
+Legacy identity.
+""")
+    with pytest.raises(ValueError, match="unknown prompt section override: SYSTEM_PROMPT_INTRO"):
+        parse_skill_file(path)

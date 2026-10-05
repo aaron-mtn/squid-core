@@ -54,6 +54,8 @@ def test_default_agent_loop_uses_minimal_provider(
         tmp_path,
         "Hello",
         settings=settings,
+        # This fixture deliberately exercises a conversation without tools.
+        tools={},
         provider=provider_type(),
         model_name="test-model",
         sessions_dir=tmp_path / "sessions",

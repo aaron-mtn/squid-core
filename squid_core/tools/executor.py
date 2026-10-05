@@ -20,12 +20,12 @@ BUILTIN_READ_FILE = TOOLS["read_file"]["execute"]
 class ToolExecutor:
     """Owns tool dispatch, execution-time guards, normalized outputs, and simple tool side effects; must not own prompts, approval decisions, or provider logic."""
 
-    # repo_root is the default working directory for run_command and the workspace
+    # workspace_root is the default working directory for run_command and the workspace
     # boundary for structured file-tool execution guards.
     # File tools still use absolute paths directly.
     def __init__(
         self,
-        repo_root: Path,
+        workspace_root: Path,
         session,
         undo_store=None,
         allow_outside_workspace: bool = False,
@@ -37,7 +37,7 @@ class ToolExecutor:
         supports_image_input: Callable[[], bool] | None = None,
         should_cancel: Callable[[], bool] | None = None,
     ) -> None:
-        self.repo_root = repo_root
+        self.workspace_root = workspace_root
         self.session = session
         self.undo_store = undo_store
         self.allow_outside_workspace = allow_outside_workspace
@@ -88,7 +88,7 @@ class ToolExecutor:
 
         outside_workspace_approved = bool(action.get("outside_workspace_approved"))
         if not self.allow_outside_workspace and not outside_workspace_approved:
-            constraint_reason = workspace_boundary_reason(boundary_action, self.repo_root)
+            constraint_reason = workspace_boundary_reason(boundary_action, self.workspace_root)
             if constraint_reason is not None:
                 return {
                     "ok": False,
@@ -137,7 +137,7 @@ class ToolExecutor:
                     "image_input_supported": image_input_supported,
                 }
 
-            result = tool["execute"](self.repo_root, **execute_args)
+            result = tool["execute"](self.workspace_root, **execute_args)
             if not result.get("ok") and provisional_snapshot_path is not None:
                 self.undo_store.discard_snapshot_if_unchanged(provisional_snapshot_path)
             self._record_tool_effects(tool_name, result)

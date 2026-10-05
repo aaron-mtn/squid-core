@@ -126,8 +126,8 @@ class FakeModelAdapter:
 
 
 class FakeToolExecutor:
-    def __init__(self, repo_root=None, events: list[str] | None = None) -> None:
-        self.repo_root = repo_root
+    def __init__(self, workspace_root=None, events: list[str] | None = None) -> None:
+        self.workspace_root = workspace_root
         self.actions = []
         self.events = events
 
@@ -418,11 +418,11 @@ def run_loop(
     max_tool_steps: int | None = None,
     approval_policy: ApprovalPolicy | None = None,
     compactor: FakeCompactor | None = None,
-    repo_root=None,
+    workspace_root=None,
     on_event=None,
 ) -> tuple[Session, FakeToolExecutor, FakeModelAdapter, NullDisplay]:
-    session = Session(repo_root=repo_root)
-    tool_executor = FakeToolExecutor(repo_root=repo_root)
+    session = Session(workspace_root=workspace_root)
+    tool_executor = FakeToolExecutor(workspace_root=workspace_root)
     model_adapter = FakeModelAdapter(replies)
     display = NullDisplay()
     loop = AgentLoop(
@@ -448,7 +448,7 @@ def run_loop_with_store(
     max_tool_steps: int | None = None,
     compactor: FakeCompactor | None = None,
 ) -> tuple[Session, FakeToolExecutor, FakeSessionStore, FakeModelAdapter, NullDisplay]:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     tool_executor = FakeToolExecutor()
     session_store = FakeSessionStore()
     model_adapter = FakeModelAdapter(replies)
@@ -486,7 +486,7 @@ def run_loop_with_final_hook(
     NullDisplay,
 ]:
     """Run focused final-acceptance scenarios with observable loop state."""
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     tool_executor = FakeToolExecutor()
     session_store = FakeSessionStore()
     model_adapter = FakeModelAdapter(replies)
@@ -725,7 +725,7 @@ def test_blocked_final_limit_leaves_durable_session_replayable(tmp_path) -> None
         def before_accept_final(self, context) -> HookResponse:
             return HookResponse(block=True, reason="verification missing")
 
-    session = Session(repo_root=tmp_path)
+    session = Session(workspace_root=tmp_path)
     session_store = SessionStore.create(tmp_path, "blocked finals")
     adapter = FakeModelAdapter([reply("candidate") for _ in range(5)])
     loop = AgentLoop(
@@ -805,7 +805,7 @@ def test_loop_stops_after_three_consecutive_invalid_replies() -> None:
 
 
 def test_normal_completion_returns_complete_run_result() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter([reply("TASK COMPLETE")]),
@@ -825,7 +825,7 @@ def test_cancellation_before_model_call_returns_interrupted() -> None:
     session_store = FakeSessionStore()
     model_adapter = FakeModelAdapter([reply("TASK COMPLETE")])
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -852,7 +852,7 @@ def test_cancellation_before_model_call_returns_interrupted() -> None:
 
 
 def test_cancellation_after_persisted_tool_call_appends_interrupted_result() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session_store = FakeSessionStore()
     tool_executor = FakeToolExecutor()
     accepted_reply = tool_call_reply(
@@ -889,7 +889,7 @@ def test_cancellation_after_persisted_tool_call_appends_interrupted_result() -> 
 
 
 def test_interrupted_tool_pair_survives_saved_transcript_reload(tmp_path) -> None:
-    session = Session(repo_root=tmp_path)
+    session = Session(workspace_root=tmp_path)
     session_store = SessionStore.create(tmp_path, "cancel tool")
     accepted_reply = tool_call_reply("call_saved", args={"path": "README.md"})
     loop = AgentLoop(
@@ -927,7 +927,7 @@ def test_cancellation_after_tool_returns_persists_real_result() -> None:
             cancelled = True
             return {**result, "content": "actual file contents"}
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     accepted_reply = tool_call_reply(
         "call_completed", content="Reading.", args={"path": "README.md"}
     )
@@ -959,7 +959,7 @@ def test_keyboard_interrupt_after_tool_call_persistence_repairs_pair_and_reraise
         def check(self, action: dict):
             raise KeyboardInterrupt
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter([tool_call_reply("call_keyboard")]),
@@ -992,7 +992,7 @@ def test_ordinary_failure_after_tool_call_persistence_repairs_pair_and_reraises(
             raise RuntimeError("approval exploded")
 
     events = []
-    session = Session(repo_root=tmp_path)
+    session = Session(workspace_root=tmp_path)
     session_store = SessionStore.create(tmp_path, "ordinary tool failure")
     loop = AgentLoop(
         session=session,
@@ -1019,7 +1019,7 @@ def test_ordinary_failure_after_tool_call_persistence_repairs_pair_and_reraises(
 def test_cancellation_during_streamed_output_unwinds_as_interrupted() -> None:
     events = []
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=FakeModelAdapter(
             [reply("unused")],
             streaming=True,
@@ -1050,7 +1050,7 @@ def test_cancellation_during_streamed_output_unwinds_as_interrupted() -> None:
 def test_normal_successful_tool_execution_still_persists_normal_result() -> None:
     accepted_reply = tool_call_reply("call_success", content="Reading.")
     action = accepted_reply["actions"][0]
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     tool_executor = FakeToolExecutor()
     loop = AgentLoop(
         session=session,
@@ -1083,7 +1083,7 @@ def test_cancellation_after_validated_model_reply_prevents_tool_turn() -> None:
             cancelled = True
             return validation
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session_store = FakeSessionStore()
     tool_executor = FakeToolExecutor()
     display = NullDisplay()
@@ -1118,7 +1118,7 @@ def test_cancellation_after_validated_model_reply_prevents_tool_turn() -> None:
 
 
 def test_repeated_invalid_replies_return_failed_run_result() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter(
@@ -1156,7 +1156,7 @@ def test_failed_message_persistence_leaves_session_unchanged() -> None:
         def append_message(self, message: dict, usage=None) -> None:
             raise RuntimeError("message persistence failed")
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     original = {"role": "system", "content": "already committed"}
     session.add_message(original)
 
@@ -1180,7 +1180,7 @@ def test_record_messages_keeps_order_and_commits_only_successful_prefix() -> Non
                 raise RuntimeError("second append failed")
             self.messages.append(message)
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     store = SecondAppendFails()
     first = {"role": "user", "content": "first"}
     second = {"role": "assistant", "content": "second"}
@@ -1201,7 +1201,7 @@ def test_failed_system_reconciliation_persistence_leaves_session_unchanged() -> 
         {"role": "system", "content": "old system"},
         {"role": "user", "content": "keep me"},
     ]
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session.add_messages(*original_messages)
 
     with pytest.raises(RuntimeError, match="reconciliation persistence failed"):
@@ -1215,7 +1215,7 @@ def test_failed_system_reconciliation_persistence_leaves_session_unchanged() -> 
 
 
 def test_new_coding_session_sends_system_prompt_and_raw_task_without_runtime_wrapper() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session_store = FakeSessionStore()
     model_adapter = FakeModelAdapter([reply("TASK COMPLETE")])
     agent = CodingAgent(task="build a notes app", tools={})
@@ -1238,7 +1238,7 @@ def test_new_coding_session_sends_system_prompt_and_raw_task_without_runtime_wra
 
 
 def test_resumed_coding_session_sends_prior_context_and_raw_follow_up_without_wrapper() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     canonical_messages = [
         {"role": "system", "content": "saved system"},
         {"role": "user", "content": "build a notes app"},
@@ -1292,7 +1292,7 @@ def test_resumed_coding_session_sends_prior_context_and_raw_follow_up_without_wr
 
 
 def test_preloaded_session_does_not_get_duplicate_initial_messages() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session.add_messages(
         {"role": "system", "content": "saved system"},
         {"role": "user", "content": "saved follow-up"},
@@ -1350,7 +1350,7 @@ def test_existing_session_adopts_current_specialization_between_runs(
         {"role": "assistant", "content": "original result"},
         {"role": "user", "content": "follow up"},
     ]
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session.add_messages(
         {
             "role": "system",
@@ -1381,7 +1381,7 @@ def test_existing_session_adopts_current_specialization_between_runs(
 
 def test_compactor_is_called_before_thinking_and_next_model_reply() -> None:
     events = []
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter([reply("TASK COMPLETE")], events=events),
@@ -1439,7 +1439,7 @@ def test_compaction_lifecycle_is_published_through_loop_events() -> None:
 def test_failed_compaction_boundary_is_published_through_loop_events() -> None:
     events = []
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=FakeModelAdapter([]),
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -1476,7 +1476,7 @@ def test_compaction_hook_observes_already_active_compacted_transcript() -> None:
         def compaction_applied(self, ctx) -> None:
             observations.append((list(store.compactions), list(session.messages)))
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session.add_message({"role": "user", "content": "old history"})
     loop = AgentLoop(
         session=session,
@@ -1502,7 +1502,7 @@ def test_compaction_hook_observes_already_active_compacted_transcript() -> None:
 
 def test_compactor_is_not_called_when_session_already_stopped() -> None:
     compactor = FakeCompactor()
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter([]),
@@ -1752,7 +1752,7 @@ def test_loop_emits_basic_run_events(tmp_path) -> None:
             ),
             reply("TASK COMPLETE"),
         ],
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
         on_event=events.append,
     )
 
@@ -1770,7 +1770,7 @@ def test_loop_emits_basic_run_events(tmp_path) -> None:
         "final_message",
         "run_finished",
     ]
-    assert events[0]["repo_root"] == str(tmp_path)
+    assert events[0]["workspace_root"] == str(tmp_path)
     assert events[0]["task"] == ""
     assert events[1]["hooks"] == []
     assert events[4]["message"] == "Reading file."
@@ -1803,7 +1803,7 @@ def test_loop_emits_basic_run_events(tmp_path) -> None:
 
 def test_streaming_enabled_emits_started_deltas_and_full_assistant_message() -> None:
     events = []
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     model_adapter = FakeModelAdapter(
         [
             reply("Reading file.", actions=[{"tool": "read_file"}]),
@@ -1893,7 +1893,7 @@ def test_streaming_reasoning_precedes_narration_and_tool_execution() -> None:
     )
     tool_executor = FakeToolExecutor(events=callback_events)
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=model_adapter,
         tool_executor=tool_executor,
         tool_results=FakeToolResults(),
@@ -1925,7 +1925,7 @@ def test_streaming_reasoning_precedes_narration_and_tool_execution() -> None:
 
 def test_streaming_enabled_emits_tool_preparing_before_message_and_tool_started() -> None:
     events = []
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     model_adapter = FakeModelAdapter(
         [
             reply(
@@ -2008,7 +2008,7 @@ def test_streaming_enabled_does_not_execute_tool_until_full_reply_returns_and_va
         events.append(event)
         callback_events.append(event["type"])
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     model_adapter = FakeModelAdapter(
         [
             reply("Using read_file.", actions=[{"tool": "read_file"}]),
@@ -2047,7 +2047,7 @@ def test_streaming_enabled_does_not_execute_tool_until_full_reply_returns_and_va
 def test_streaming_enabled_but_unsupported_provider_falls_back_to_non_streaming() -> None:
     events = []
     model_events = []
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     model_adapter = FakeModelAdapter(
         [reply("TASK COMPLETE")],
         events=model_events,
@@ -2076,7 +2076,7 @@ def test_non_streaming_presentation_still_uses_cancellable_provider_stream() -> 
     events = []
     model_events = []
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=FakeModelAdapter(
             [reply("TASK COMPLETE")],
             events=model_events,
@@ -2182,7 +2182,7 @@ def test_event_callback_failure_does_not_crash_loop() -> None:
 
 
 def test_invalid_assistant_reply_is_displayed_in_debug_mode() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     display = NullDisplay()
     display.debug = True
     loop = AgentLoop(
@@ -2278,7 +2278,7 @@ def test_guarded_allows_inside_workspace_read_file_without_approval(tmp_path) ->
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("guarded", prompter=prompter),
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
     )
 
     assert prompter.actions == []
@@ -2305,7 +2305,7 @@ def test_guarded_allows_inside_workspace_write_file_without_approval(tmp_path) -
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("guarded", prompter=prompter),
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
     )
 
     assert prompter.actions == []
@@ -2337,7 +2337,7 @@ def test_guarded_allows_inside_workspace_apply_patch_without_approval(tmp_path) 
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("guarded", prompter=prompter),
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
     )
 
     assert prompter.actions == []
@@ -2368,7 +2368,7 @@ def test_guarded_asks_for_outside_workspace_file_tool(tmp_path) -> None:
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("guarded", prompter=prompter),
-        repo_root=workspace,
+        workspace_root=workspace,
     )
 
     assert tool_executor.actions == []
@@ -2386,7 +2386,7 @@ def test_guarded_asks_for_every_untrusted_run_command(tmp_path) -> None:
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("guarded", prompter=prompter),
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
     )
 
     assert tool_executor.actions == []
@@ -2407,7 +2407,7 @@ def test_guarded_trusted_command_runs_without_approval(tmp_path) -> None:
         approval_policy=ApprovalPolicy(
             "guarded", prompter=prompter, trusted_commands=("mkdir",)
         ),
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
     )
 
     assert prompter.actions == []
@@ -2432,14 +2432,14 @@ def test_hook_preflight_execution_and_result_order_is_preserved(tmp_path) -> Non
             return ActionPreflightDecision(action, action)
 
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=FakeModelAdapter(
             [
                 reply("valid", actions=[{"tool": "read_file"}]),
                 reply("TASK COMPLETE"),
             ]
         ),
-        tool_executor=FakeToolExecutor(repo_root=tmp_path, events=events),
+        tool_executor=FakeToolExecutor(workspace_root=tmp_path, events=events),
         tool_results=FakeToolResults(),
         agent=FakeAgent(),
         display=NullDisplay(),
@@ -2469,7 +2469,7 @@ def test_tool_result_context_is_transient_and_updated_output_is_persisted(
                 additional_context=guidance,
             )
 
-    session = Session(repo_root=tmp_path)
+    session = Session(workspace_root=tmp_path)
     session_store = FakeSessionStore()
     model_adapter = FakeModelAdapter(
         [
@@ -2480,7 +2480,7 @@ def test_tool_result_context_is_transient_and_updated_output_is_persisted(
     loop = AgentLoop(
         session=session,
         model_adapter=model_adapter,
-        tool_executor=FakeToolExecutor(repo_root=tmp_path),
+        tool_executor=FakeToolExecutor(workspace_root=tmp_path),
         tool_results=ToolResults(),
         agent=FakeAgent(),
         display=NullDisplay(),
@@ -2515,7 +2515,7 @@ def test_successful_model_request_lifecycle_is_persisted(tmp_path) -> None:
     model_adapter.reasoning_mode = "low"
     model_adapter.reasoning_token_budget = 4_000
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2552,7 +2552,7 @@ def test_failed_model_request_leaves_durable_failure_events(tmp_path) -> None:
 
     session_store = TrackingSessionStore.create(tmp_path, "failed request")
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=FailingModelAdapter([]),
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2609,7 +2609,7 @@ def test_transient_model_failure_retries_same_turn_then_succeeds(tmp_path) -> No
         [_wrapped_model_error(TimeoutError("provider timed out")), reply("TASK COMPLETE")]
     )
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2646,7 +2646,7 @@ def test_cancellation_interrupts_retry_backoff_promptly() -> None:
         [_wrapped_model_error(TimeoutError("provider timed out"))]
     )
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2683,7 +2683,7 @@ def test_transient_model_failure_exhausts_retries_with_diagnostics(tmp_path) -> 
     session_store = SessionStore.create(tmp_path, "exhausted request")
     model_adapter = SequencedRequestAdapter(request_failures)
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2721,7 +2721,7 @@ def test_permanent_model_failure_does_not_retry(tmp_path) -> None:
     )
     session_store = SessionStore.create(tmp_path, "permanent request")
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2756,7 +2756,7 @@ def test_model_failure_log_redacts_credentials(tmp_path) -> None:
     )
     session_store = SessionStore.create(tmp_path, "redacted request")
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=model_adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2781,7 +2781,7 @@ def test_keyboard_interrupt_leaves_durable_terminal_event_before_status(tmp_path
 
     session_store = TrackingSessionStore.create(tmp_path, "interrupted request")
     loop = AgentLoop(
-        session=Session(repo_root=tmp_path),
+        session=Session(workspace_root=tmp_path),
         model_adapter=InterruptingModelAdapter([]),
         tool_executor=FakeToolExecutor(),
         tool_results=FakeToolResults(),
@@ -2820,7 +2820,7 @@ def test_always_still_asks_for_every_tool(tmp_path) -> None:
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("always", prompter=prompter),
-        repo_root=tmp_path,
+        workspace_root=tmp_path,
     )
 
     assert len(prompter.actions) == 1
@@ -2844,7 +2844,7 @@ def test_never_still_asks_never_and_allows_outside_workspace(tmp_path) -> None:
             reply("TASK COMPLETE"),
         ],
         approval_policy=ApprovalPolicy("never", prompter=prompter),
-        repo_root=workspace,
+        workspace_root=workspace,
     )
 
     assert prompter.actions == []
@@ -2880,7 +2880,7 @@ def test_empty_approval_decision_executes_tool_action() -> None:
 
 
 def test_approval_denial_appends_normal_denied_tool_result_message() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     tool_executor = FakeToolExecutor()
     loop = AgentLoop(
         session=session,
@@ -2916,7 +2916,7 @@ def test_approval_denial_appends_normal_denied_tool_result_message() -> None:
 
 
 def test_approval_comment_is_appended_after_denied_tool_result() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter(
@@ -2977,7 +2977,7 @@ def test_approval_comment_is_appended_after_denied_tool_result() -> None:
 
 def test_multiline_approval_comment_is_appended_after_denied_tool_result() -> None:
     instruction = "Please do this instead:\n1. Read README.md\n2. Keep the patch tiny"
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=FakeModelAdapter(
@@ -3062,7 +3062,7 @@ def test_default_max_tool_steps_does_not_stop_normal_behavior() -> None:
 
 
 def test_multiple_successful_tool_calls_execute_and_record_in_order() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = FakeToolExecutor()
     loop = AgentLoop(
         session=session,
@@ -3120,7 +3120,7 @@ def test_canonical_multi_action_arguments_reach_executor_unchanged() -> None:
     )
     executor = FakeToolExecutor()
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=FakeModelAdapter(
             [multi_tool_call_reply_with_args(*actions), reply("TASK COMPLETE")]
         ),
@@ -3143,7 +3143,7 @@ def test_first_failed_action_stops_batch_and_closes_unattempted_calls() -> None:
             self.actions.append(action)
             return {"ok": False, "tool": action["tool"], "error": "failed"}
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = FailingExecutor()
     loop = AgentLoop(
         session=session,
@@ -3177,7 +3177,7 @@ def test_denied_action_stops_remaining_batch() -> None:
         def check(self, action: dict) -> ApprovalDecision:
             return ApprovalDecision(approved=False, reason="denied")
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = FakeToolExecutor()
     loop = AgentLoop(
         session=session,
@@ -3209,7 +3209,7 @@ def test_hook_blocked_action_stops_remaining_batch() -> None:
         def before_tool_execute(self, context) -> HookResponse:
             return HookResponse(block=True, reason="blocked")
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = FakeToolExecutor()
     loop = AgentLoop(
         session=session,
@@ -3237,7 +3237,7 @@ def test_hook_blocked_action_stops_remaining_batch() -> None:
 
 
 def test_tool_step_limit_stops_partway_through_batch() -> None:
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = FakeToolExecutor()
     adapter = FakeModelAdapter(
         [
@@ -3304,7 +3304,7 @@ def test_multi_action_hooks_keep_intermediate_guidance_for_next_model_turn() -> 
         ]
     )
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=ToolResults(),
@@ -3337,7 +3337,7 @@ def test_multi_action_hooks_keep_distinct_guidance_in_execution_order() -> None:
         ]
     )
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=ToolResults(),
@@ -3369,7 +3369,7 @@ def test_multi_action_hooks_deduplicate_exact_repeated_guidance() -> None:
         ]
     )
     loop = AgentLoop(
-        session=Session(repo_root=None),
+        session=Session(workspace_root=None),
         model_adapter=adapter,
         tool_executor=FakeToolExecutor(),
         tool_results=ToolResults(),
@@ -3396,7 +3396,7 @@ def test_single_action_transient_guidance_behavior_is_unchanged() -> None:
             reply("TASK COMPLETE"),
         ]
     )
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     loop = AgentLoop(
         session=session,
         model_adapter=adapter,
@@ -3420,7 +3420,7 @@ def test_single_action_transient_guidance_behavior_is_unchanged() -> None:
 
 def _run_read_batch(tmp_path, actions, hooks):
     """Exercise sibling reads through the production executor and Hook pipeline."""
-    session = Session(repo_root=tmp_path)
+    session = Session(workspace_root=tmp_path)
     adapter = FakeModelAdapter(
         [multi_tool_call_reply_with_args(*actions), reply("TASK COMPLETE")]
     )
@@ -3483,7 +3483,7 @@ def test_cancellation_during_partial_batch_closes_every_tool_call() -> None:
             cancelled = True
             return result
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = CancellingExecutor()
     loop = AgentLoop(
         session=session,
@@ -3524,7 +3524,7 @@ def test_exception_during_partial_batch_closes_every_tool_call_and_reraises() ->
                 raise RuntimeError("tool exploded")
             return {"ok": True, "tool": action["tool"]}
 
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     executor = ExplodingExecutor()
     loop = AgentLoop(
         session=session,
@@ -3654,7 +3654,7 @@ def test_tool_started_and_finished_include_tool_call_id() -> None:
 
 def test_event_order_with_persistence() -> None:
     all_events: list[str] = []
-    session = Session(repo_root=None)
+    session = Session(workspace_root=None)
     session_store = FakeSessionStore(events=all_events)
     loop = AgentLoop(
         session=session,
