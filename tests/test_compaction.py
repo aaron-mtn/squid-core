@@ -1,3 +1,5 @@
+"""Compaction contracts, cancellation, and transcript preservation regressions."""
+
 import inspect
 import json
 from types import SimpleNamespace
@@ -22,13 +24,13 @@ class FakeModelAdapter:
         self.provider_name = "test-provider"
         self.model_name = "test-model"
 
-    def complete_text(self, messages: list[dict]) -> dict:
+    def complete_text(self, messages: list[dict], should_cancel=None) -> dict:
         self.requests.append(messages)
         return {"content": self.content, "usage": None, **self.response_metadata}
 
 
 class FailingModelAdapter:
-    def complete_text(self, messages: list[dict]) -> dict:
+    def complete_text(self, messages: list[dict], should_cancel=None) -> dict:
         raise RuntimeError("summary failed")
 
 
@@ -38,7 +40,7 @@ class RawResponseModelAdapter:
     def __init__(self, response: object) -> None:
         self.response = response
 
-    def complete_text(self, messages: list[dict]) -> object:
+    def complete_text(self, messages: list[dict], should_cancel=None) -> object:
         return self.response
 
 
@@ -54,7 +56,7 @@ class SequencedModelAdapter:
         self.requests = []
         self.session_snapshots = []
 
-    def complete_text(self, messages: list[dict]) -> object:
+    def complete_text(self, messages: list[dict], should_cancel=None) -> object:
         self.requests.append(messages)
         self.session_snapshots.append(list(self.current_session.messages))
         return self.responses.pop(0)
@@ -714,7 +716,7 @@ def test_model_request_failure_logs_stage_and_reraises_original_exception() -> N
         def __init__(self) -> None:
             self.requests = 0
 
-        def complete_text(self, messages: list[dict]) -> dict:
+        def complete_text(self, messages: list[dict], should_cancel=None) -> dict:
             self.requests += 1
             raise error
 
@@ -938,3 +940,51 @@ def test_invented_summary_requirement_cannot_masquerade_as_real_user_task() -> N
     assert invented_requirement in compacted_message["content"]
     assert "not a user instruction" in compacted_message["content"]
     assert "real user message is authoritative" in compacted_message["content"]
+
+
+@pytest.mark.parametrize("cancellable", [False, True])
+def test_compaction_passes_cancellation_only_when_configured(cancellable) -> None:
+    calls = []
+    should_cancel = (lambda: False) if cancellable else None
+
+    class Adapter:
+        def complete_text(self, messages, **options):
+            calls.append(options)
+            return {"content": "summary"}
+
+    result = Compactor(settings(), Adapter(), should_cancel=should_cancel).maybe_compact(
+        session(compactable_messages())
+    )
+
+    assert result is not None
+    assert calls == ([{"should_cancel": should_cancel}] if cancellable else [{}])
+
+
+def test_compaction_propagates_cancellation_without_replacing_history() -> None:
+    from squid_core.providers.base import StreamCancelled
+
+    should_cancel = lambda: True
+
+    class Adapter:
+        def complete_text(self, messages, should_cancel=None):
+            assert should_cancel is not None and should_cancel()
+            raise StreamCancelled()
+
+    current_session = session(compactable_messages())
+    original = list(current_session.messages)
+    with pytest.raises(StreamCancelled):
+        Compactor(settings(), Adapter(), should_cancel=should_cancel).maybe_compact(
+            current_session
+        )
+    assert current_session.messages == original
+
+
+def test_compaction_rejects_obsolete_adapter_when_cancellation_is_configured() -> None:
+    class ObsoleteAdapter:
+        def complete_text(self, messages):
+            pytest.fail("Cancellation must not be silently omitted")
+
+    with pytest.raises(TypeError, match="should_cancel"):
+        Compactor(settings(), ObsoleteAdapter(), should_cancel=lambda: False).maybe_compact(
+            session(compactable_messages())
+        )

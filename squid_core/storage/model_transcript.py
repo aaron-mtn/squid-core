@@ -301,10 +301,10 @@ def _assistant_was_already_rendered(message: dict, replies: list[dict]) -> bool:
 
 
 def _render_reply(lines: list[str], assistant: dict, *, final: bool) -> None:
-    for name in ("reasoning", "reasoning_content", "thinking"):
-        if assistant.get(name) not in (None, ""):
-            _block(lines, "REASONING", _readable(assistant[name]))
-            break
+    # Provider-native aliases are normalized before persistence, not on replay.
+    reasoning = assistant.get("reasoning")
+    if reasoning not in (None, ""):
+        _block(lines, "REASONING", _readable(reasoning))
     content = assistant.get("content")
     if content:
         if final:

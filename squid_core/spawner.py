@@ -81,8 +81,8 @@ def _wire_model_view_observer(model_adapter, session_store: SessionStore) -> Non
     set_request_observer = getattr(model_adapter, "set_request_observer", None)
     append_model_view = getattr(session_store, "append_model_view", None)
     if not callable(set_request_observer) or not callable(append_model_view):
-        # Legacy/custom adapters remain valid; only adapters exposing the new
-        # finalized-request seam participate in automatic request capture.
+        # Custom collaborators may omit request observation. Automatic capture
+        # requires both the adapter's observation seam and the store's sink.
         return
 
     def append_final_request(request: dict) -> None:

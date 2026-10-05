@@ -1,6 +1,5 @@
 """Normalize model-provider requests, responses, and safe failure details."""
 
-import inspect
 import json
 import re
 from collections.abc import Callable
@@ -421,22 +420,10 @@ class ModelAdapter:
         tool_metadata = self._tool_metadata_from_definitions(request["tools"])
         transport_options = {
             "on_text_delta": on_text_delta,
+            "on_reasoning_delta": on_reasoning_delta,
             "on_tool_preparing": on_tool_preparing,
             "should_cancel": should_cancel,
         }
-        if on_reasoning_delta is not None:
-            try:
-                parameters = inspect.signature(self.provider.stream_chat).parameters
-            except (TypeError, ValueError):
-                parameters = {}
-            accepts_keywords = any(
-                parameter.kind is inspect.Parameter.VAR_KEYWORD
-                for parameter in parameters.values()
-            )
-            if "on_reasoning_delta" in parameters or accepts_keywords:
-                # Keep older custom streaming providers working while built-in
-                # transports adopt the optional reasoning-delta seam.
-                transport_options["on_reasoning_delta"] = on_reasoning_delta
         raw_response = self._send_prepared_request(
             request,
             streaming=True,

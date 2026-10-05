@@ -858,7 +858,7 @@ def test_respond_streaming_emits_deltas_and_returns_normalized_reply() -> None:
     assert observed == [provider.requests[0]]
 
 
-def test_respond_streaming_forwards_reasoning_deltas_when_provider_supports_them() -> None:
+def test_respond_streaming_forwards_reasoning_deltas() -> None:
     message = FakeMessage(content="done", tool_calls=[])
     message.reasoning = "first second"
     provider = StreamingProvider(
@@ -933,3 +933,17 @@ def test_plain_text_invalid_generic_response_is_wrapped():
     with pytest.raises(ModelRequestError) as caught:
         adapter.complete_text([])
     assert model_request_error_details(caught.value)["failure_class"] == "malformed_response"
+
+
+def test_streaming_rejects_pre_reasoning_callback_provider() -> None:
+    class ObsoleteProvider:
+        def stream_chat(self, model, messages, tools, on_text_delta,
+                        on_tool_preparing=None, should_cancel=None):
+            pytest.fail("Reasoning callback must not be silently omitted")
+
+    adapter = ModelAdapter(ObsoleteProvider(), "test-model")
+    with pytest.raises(ModelRequestError, match="on_reasoning_delta"):
+        adapter.respond_streaming(
+            [], [], on_text_delta=lambda _delta: None,
+            on_reasoning_delta=lambda _delta: None,
+        )

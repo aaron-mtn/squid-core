@@ -189,3 +189,26 @@
   Verification: focused prompt/platform tests 38 passed; full Core suite 769
   passed, 1 skipped. Source/test compileall, prompt imports, and git diff --check
   passed. No live inference or deferred follow-ups.
+
+- 2026-10-04: Completed the final pre-v0.1 compatibility cleanup. Removed
+  streaming-provider signature inspection and silent omission of
+  on_reasoning_delta, compaction adapter signature inspection and silent
+  omission of configured should_cancel, and persisted reasoning_content/
+  thinking fallback reads. Streaming callbacks now use the current provider
+  contract; compaction uses an ordinary call without cancellation and passes
+  the configured callback otherwise. Updated compaction/generation test doubles,
+  fixed the transcript's diagnostic raw_tool_calls fixture to flat records, and
+  retained explicit nested model-message coverage. Request observation keeps
+  its capability checks; only its historical comment changed.
+  Code Squid removed its unused CodingAgent alias/module and uses Core Agent
+  directly in the affected tests. No current production caller used the alias.
+  No aliases, migrations, or fallback paths were added. Obsolete pre-release
+  provider/adapter signatures intentionally fail when supplied current callbacks.
+  Verification: focused model adapter, compaction, transcript, spawner, and
+  generation tests 159 passed; full Core 791 passed, 1 skipped. Focused Code
+  Squid Agent/runner/import-boundary tests 77 passed; full application 778 passed.
+  Source/test compileall and fresh-process Core imports/Agent construction passed;
+  application imports/construction and direct Core Agent wiring passed.
+  git diff --check passed in both repositories. No live inference was run.
+  No implementation follow-ups deferred; provider/settings migrations, package
+  metadata, and unrelated architecture remain outside this patch.

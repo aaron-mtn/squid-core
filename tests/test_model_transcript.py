@@ -65,7 +65,13 @@ def test_transcript_deduplicates_requests_and_orders_model_visible_changes() -> 
                 "assistant": {
                     "reasoning": "Need source first.",
                     "content": "I will inspect it.",
-                    "raw_tool_calls": assistant["tool_calls"],
+                    "raw_tool_calls": [
+                        {
+                            "id": "call-1",
+                            "name": "read_file",
+                            "arguments": '{"path":"a.py"}',
+                        }
+                    ],
                 }
             },
         },
@@ -174,3 +180,35 @@ def test_session_store_writes_transcript_beside_existing_logs(tmp_path: Path) ->
     assert "hello model" in store.model_transcript_path.read_text(encoding="utf-8")
     assert store.jsonl_path.exists()
     assert store.model_view_path.exists()
+
+
+def test_persisted_reasoning_uses_only_the_current_field() -> None:
+    for reasoning in (None, "", "current reasoning"):
+        transcript = render_model_transcript(
+            [{"type": "model_reply", "reply": {"assistant": {
+                "content": "answer", "reasoning": reasoning,
+                "reasoning_content": "obsolete reasoning", "thinking": "obsolete thinking",
+            }}}], []
+        )
+        assert "obsolete reasoning" not in transcript
+        assert "obsolete thinking" not in transcript
+        assert ("[REASONING]" in transcript) == bool(reasoning)
+        if reasoning:
+            assert reasoning in transcript
+
+
+def test_current_tool_calls_render_from_diagnostics_and_model_messages() -> None:
+    # Both shapes are current: flat completed-response diagnostics and nested
+    # function calls in the provider-bound message history.
+    diagnostics = [{"type": "model_reply", "reply": {"assistant": {
+        "raw_tool_calls": [{"id": "flat", "name": "read_file", "arguments": '{"path":"a.py"}'}],
+    }}}]
+    messages = [{"role": "assistant", "tool_calls": [{
+        "id": "nested", "type": "function",
+        "function": {"name": "write_file", "arguments": '{"path":"b.py"}'},
+    }]}]
+
+    flat = render_model_transcript(diagnostics, [])
+    nested = render_model_transcript([], [_request(1, "2026-01-01T00:00:01+00:00", messages)])
+    assert "[TOOL CALL]" in flat and "read_file" in flat and '"a.py"' in flat
+    assert "[TOOL CALL]" in nested and "write_file" in nested and '"b.py"' in nested

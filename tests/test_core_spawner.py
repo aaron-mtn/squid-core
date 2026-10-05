@@ -562,3 +562,20 @@ def test_loop_preserves_tool_registry(tmp_path: Path, tools) -> None:
         None, _settings(), tools=tools, model_adapter=object(),
     )
     assert loop.tool_executor.tools is (TOOLS if tools is None else tools)
+
+
+@pytest.mark.parametrize("adapter_observes,store_observes", [(False, False), (False, True), (True, False)])
+def test_request_observation_is_optional_for_custom_collaborators(
+    adapter_observes, store_observes,
+) -> None:
+    wired = []
+    adapter = SimpleNamespace()
+    store = SimpleNamespace()
+    if adapter_observes:
+        adapter.set_request_observer = wired.append
+    if store_observes:
+        store.append_model_view = lambda _request: None
+
+    core_spawner._wire_model_view_observer(adapter, store)
+
+    assert wired == []

@@ -30,7 +30,10 @@ class StreamingProvider(FakeProvider):
     def supports_streaming(self) -> bool:
         return True
 
-    def stream_chat(self, model: str, messages: list[dict], tools: list[dict], on_text_delta):
+    def stream_chat(
+        self, model: str, messages: list[dict], tools: list[dict], on_text_delta,
+        on_tool_preparing=None, should_cancel=None, on_reasoning_delta=None,
+    ):
         self.requests.append({"model": model, "messages": messages, "tools": tools})
         for delta in self.deltas:
             on_text_delta(delta)

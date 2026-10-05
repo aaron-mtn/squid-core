@@ -122,3 +122,20 @@ Text/spreadsheet omission markers and request-only trimmed source/content
 markers use `SQUID CORE` wording. Producers and omission-marker recognition
 share the new prefix. Old branded omission markers are not recognized as the
 current internal marker format; persisted original tool results are not rewritten.
+
+Current pre-release collaborator and transcript contracts
+-------------------------------------------------------
+
+Streaming providers accept `on_reasoning_delta`; ModelAdapter forwards it
+without signature inspection. Compaction calls `complete_text(messages)` when
+no cancellation callback is configured, and passes `should_cancel` when one is
+configured. Adapters must support that current cancellation contract; Core does
+not silently drop callbacks for obsolete custom signatures.
+
+Request observation remains optional for injected collaborators: automatic
+capture requires callable `set_request_observer` and `append_model_view` methods.
+Persisted assistant diagnostics render only `reasoning`; provider-native aliases
+are normalized inside providers before reaching Core. Diagnostic `raw_tool_calls`
+are flat id/name/arguments records, while model-visible message tool calls retain
+the nested function shape. The transcript renderer supports both current sources.
+No migration, reasoning fallback, or compatibility alias is provided.
