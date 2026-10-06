@@ -42,10 +42,21 @@ def read_pdf(context: FileReadContext) -> dict:
                 f"PDF is {len(pdf_data)} bytes; maximum supported size is "
                 f"{MAX_PDF_BYTES} bytes",
             )
-        import pymupdf
+    except (OSError, RuntimeError, ValueError) as error:
+        return _pdf_error(context.path, f"invalid or unreadable PDF: {error}")
 
+    # Keep optional-library failures distinct from corrupt PDF/parser failures.
+    try:
+        import pymupdf
+    except ImportError:
+        return _pdf_error(
+            context.path,
+            'PDF support requires optional document dependencies. '
+            'Install with: pip install "squid-core[documents]"',
+        )
+    try:
         document = pymupdf.open(stream=pdf_data, filetype="pdf")
-    except (ImportError, OSError, RuntimeError, ValueError) as error:
+    except (OSError, RuntimeError, ValueError) as error:
         return _pdf_error(context.path, f"invalid or unreadable PDF: {error}")
 
     try:

@@ -12,7 +12,6 @@ from squid_core.model_response import ModelResponse
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image
 
 from squid_core.model_adapter import ModelAdapter, ModelRequestError
 from squid_core.image_content import VISION_UNAVAILABLE_MESSAGE
@@ -30,6 +29,8 @@ atomic_json_module = importlib.import_module("squid_core.storage.atomic_json")
 
 def image_bytes(image_format: str, *, size: tuple[int, int] = (3, 2)) -> bytes:
     """Create one tiny in-memory fixture without committing binary assets."""
+    Image = pytest.importorskip("PIL.Image")
+
 
     stream = BytesIO()
     Image.new("RGB", size, color=(220, 30, 40)).save(stream, format=image_format)

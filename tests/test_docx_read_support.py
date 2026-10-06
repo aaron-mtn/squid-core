@@ -3,9 +3,7 @@
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from docx import Document
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
+import pytest
 
 from squid_core.file_readers.docx import read_docx
 from squid_core.file_readers.registry import reader_for_suffix
@@ -16,6 +14,8 @@ from squid_core.tools.builtins.read_file import execute as read_file
 def test_registry_dispatches_docx_and_preserves_semantic_blocks(
     tmp_path: Path,
 ) -> None:
+    Document = pytest.importorskip("docx").Document
+
     source = tmp_path / "brief.docx"
     document = Document()
     document.add_heading("Project brief", level=1)
@@ -56,6 +56,8 @@ def test_registry_dispatches_docx_and_preserves_semantic_blocks(
 
 
 def test_docx_preserves_paragraph_table_paragraph_order(tmp_path: Path) -> None:
+    Document = pytest.importorskip("docx").Document
+
     source = tmp_path / "ordered.docx"
     document = Document()
     document.add_paragraph("before")
@@ -69,6 +71,8 @@ def test_docx_preserves_paragraph_table_paragraph_order(tmp_path: Path) -> None:
 
 
 def test_docx_uses_text_truncation_and_targeted_line_ranges(tmp_path: Path) -> None:
+    Document = pytest.importorskip("docx").Document
+
     source = tmp_path / "long.docx"
     document = Document()
     for number in range(1, 21):
@@ -107,7 +111,6 @@ def test_docx_rejects_malformed_and_non_docx_containers(tmp_path: Path) -> None:
         archive.writestr("content.txt", "ordinary zip")
 
     malformed_result = read_file(tmp_path, str(malformed))
-    parser_result = read_file(tmp_path, str(not_docx))
 
     assert malformed_result == {
         "ok": False,
@@ -115,7 +118,8 @@ def test_docx_rejects_malformed_and_non_docx_containers(tmp_path: Path) -> None:
         "path": str(malformed),
         "error": "invalid or unreadable DOCX container",
     }
-    assert parser_result == {
+    pytest.importorskip("docx")
+    assert read_file(tmp_path, str(not_docx)) == {
         "ok": False,
         "tool": "read_file",
         "path": str(not_docx),
@@ -130,7 +134,8 @@ def test_docx_rejects_oversized_compressed_container(
     from squid_core.file_readers import docx
 
     source = tmp_path / "large.docx"
-    Document().save(source)
+    with ZipFile(source, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("content.txt", "fixture")
     monkeypatch.setattr(docx, "MAX_DOCX_BYTES", source.stat().st_size - 1)
 
     result = read_file(tmp_path, str(source))
@@ -147,7 +152,8 @@ def test_docx_rejects_excessive_expanded_container(
     from squid_core.file_readers import docx
 
     source = tmp_path / "expanded.docx"
-    Document().save(source)
+    with ZipFile(source, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("content.txt", "fixture")
     monkeypatch.setattr(docx, "MAX_DOCX_EXPANDED_BYTES", 2)
 
     result = read_file(tmp_path, str(source))
@@ -159,7 +165,8 @@ def test_docx_rejects_excessive_expanded_container(
 
 def test_docx_rejects_non_line_selectors(tmp_path: Path) -> None:
     source = tmp_path / "selectors.docx"
-    Document().save(source)
+    with ZipFile(source, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("content.txt", "fixture")
 
     pages = read_file(
         tmp_path,
@@ -181,6 +188,9 @@ def test_docx_rejects_non_line_selectors(tmp_path: Path) -> None:
 
 def _add_hyperlink(paragraph, text: str, url: str) -> None:
     """Add one external hyperlink using python-docx's supported relationship API."""
+    OxmlElement = pytest.importorskip("docx.oxml").OxmlElement
+    qn = pytest.importorskip("docx.oxml.ns").qn
+
 
     relationship_id = paragraph.part.relate_to(
         url,
@@ -195,3 +205,11 @@ def _add_hyperlink(paragraph, text: str, url: str) -> None:
     run.append(text_node)
     hyperlink.append(run)
     paragraph._p.append(hyperlink)
+
+
+def test_docx_malformed_container_without_parser(tmp_path: Path) -> None:
+    source = tmp_path / "malformed.docx"
+    source.write_bytes(b"not a zip")
+    assert read_file(tmp_path, str(source))["error"] == (
+        "invalid or unreadable DOCX container"
+    )

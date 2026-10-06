@@ -21,9 +21,17 @@ def read_xlsx(context: FileReadContext) -> dict:
     if validation_error is not None:
         return validation_error
 
+    # Import failures describe installation, not the validity of the input.
     try:
         from openpyxl import load_workbook
+    except ImportError:
+        return spreadsheet_error(
+            context.path,
+            'XLSX support requires optional document dependencies. '
+            'Install with: pip install "squid-core[documents]"',
+        )
 
+    try:
         workbook = load_workbook(
             context.file_path,
             read_only=True,

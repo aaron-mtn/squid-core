@@ -7,7 +7,17 @@ name = "squid-core"
 version = "0.1.0"
 description = "Reusable agent runtime"
 requires-python = ">=3.11"
-dependencies = ["epub-utils==0.1.0a1", "odfpy", "openpyxl", "python-docx", "Pillow", "PyMuPDF"]
+dependencies = []
+
+[project.optional-dependencies]
+documents = [
+    "epub-utils==0.1.0a1",
+    "odfpy",
+    "openpyxl",
+    "python-docx",
+    "Pillow",
+    "PyMuPDF",
+]
 
 [tool.setuptools]
 include-package-data = false

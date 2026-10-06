@@ -7,9 +7,7 @@ import json
 from io import BytesIO
 from pathlib import Path
 
-import pymupdf
 import pytest
-from PIL import Image
 
 from squid_core.settings import ToolResultTrimmingSettings
 from squid_core.storage import SessionStore
@@ -22,6 +20,9 @@ pdf_reader_module = importlib.import_module("squid_core.file_readers.pdf")
 
 
 def _write_pdf(path: Path, texts: list[str | None]) -> None:
+    pymupdf = pytest.importorskip("pymupdf")
+    pytest.importorskip("PIL.Image")
+
     path.unlink(missing_ok=True)
     document = pymupdf.open()
     for text in texts:
@@ -33,6 +34,9 @@ def _write_pdf(path: Path, texts: list[str | None]) -> None:
 
 
 def _write_scanned_pdf(path: Path) -> None:
+    pymupdf = pytest.importorskip("pymupdf")
+    Image = pytest.importorskip("PIL.Image")
+
     stream = BytesIO()
     Image.new("RGB", (40, 30), color=(20, 80, 180)).save(stream, format="PNG")
     document = pymupdf.open()
@@ -193,6 +197,8 @@ def test_additional_pdf_pages_share_folder_and_preserve_valid_page_cache(
 def test_pdf_render_setting_change_invalidates_only_matching_page_entry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    Image = pytest.importorskip("PIL.Image")
+
     store = SessionStore.create(tmp_path / "sessions", "render settings")
     source = tmp_path / "settings.pdf"
     _write_pdf(source, ["settings"])
@@ -292,6 +298,9 @@ def test_same_stem_pdfs_receive_stable_numbered_render_folders(tmp_path: Path) -
 def test_pdf_rejects_corruption_file_size_and_excess_page_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    pytest.importorskip("pymupdf")
+    pytest.importorskip("PIL.Image")
+
     store = SessionStore.create(tmp_path / "sessions", "limits")
     source = tmp_path / "bad.pdf"
     source.write_bytes(b"not a PDF")
@@ -322,6 +331,8 @@ def test_pdf_rejects_corruption_file_size_and_excess_page_selection(
 def test_pdf_page_api_is_distinct_from_text_ranges_and_bounds_render_size(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    Image = pytest.importorskip("PIL.Image")
+
     store = SessionStore.create(tmp_path / "sessions", "page api")
     source = tmp_path / "large-page.pdf"
     _write_pdf(source, ["bounded"])
@@ -425,3 +436,13 @@ def test_old_pdf_text_can_trim_without_losing_rendered_page_location(
     assert "truncated: yes" in old_pdf_content
     assert "[older payload truncated]" in old_pdf_content
     assert result["rendered_pages"][0]["path"] in old_pdf_content
+
+
+def test_pdf_file_size_limit_without_parser(tmp_path: Path, monkeypatch) -> None:
+    store = SessionStore.create(tmp_path / "sessions", "size limit")
+    source = tmp_path / "large.pdf"
+    source.write_bytes(b"fixture")
+    monkeypatch.setattr(pdf_reader_module, "MAX_PDF_BYTES", 1)
+    result = _pdf_read(store, source)
+    assert result["ok"] is False
+    assert "maximum supported size" in result["error"]

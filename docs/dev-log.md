@@ -212,3 +212,45 @@
   git diff --check passed in both repositories. No live inference was run.
   No implementation follow-ups deferred; provider/settings migrations, package
   metadata, and unrelated architecture remain outside this patch.
+
+
+- 2026-10-04: Made the v0.1 base package require zero third-party Python runtime
+  dependencies. Set project.dependencies to [] and moved epub-utils==0.1.0a1,
+  odfpy, openpyxl, python-docx, Pillow, and PyMuPDF into the single documents
+  extra. Package name/version, Python minimum, build requirements, and reader
+  ownership/static suffix dispatch remain unchanged. Moved the sole eager
+  third-party runtime import (PIL Image/UnidentifiedImageError in image_content)
+  into inspect_image_bytes. EPUB, ODS, XLSX, DOCX, and PDF readers now separate
+  optional import failures from malformed-file errors, returning the existing
+  tool failure shape with pip install "squid-core[documents]" guidance. Pillow
+  absence raises ImageValidationError with that same guidance, including through
+  session generated-image validation; installed-library integrity, decompression,
+  container, and range checks remain intact. Optional parser fixture imports now
+  skip at use sites; parser-independent tests still run, using stdlib ZIP fixtures
+  for container/selector checks. Added fresh-process blocked-import, packaging,
+  plain-text/session storage, every known optional suffix, and image/generated
+  image failure coverage. Updated README installation notes and architecture docs.
+  Verification: focused optional-dependency/reader/document/image suite 80 passed;
+  full current-environment Core suite 809 passed, 1 platform skip. Full suite with
+  all six optional dependency roots (and the legacy fitz alias) blocked: 761
+  passed, 49 skipped. Built a wheel and verified all six Requires-Dist entries
+  are conditional on the documents extra, with no unconditional requirements.
+  Installed that wheel into a fresh temporary environment containing only pip
+  and squid-core; outside the checkout, verified absent optional modules, Core/
+  Agent/spawner/built-in imports, Agent construction, schemas, plain-text reading,
+  and pip check. Production AST import inventory found only the six optional
+  roots beyond stdlib/Core, all lazy. Source/test compileall and git diff --check
+  passed. No live model inference. No implementation follow-ups deferred;
+  publication and the broader README/license cleanup remain outside this patch.
+
+- 2026-10-05: Verified Providers finding #3 without changing production code.
+  The shared classifier already traverses causes and unsuppressed contexts and
+  recognizes wrapped urllib HTTPError status through its generic status lookup.
+  Added 12 direct public-contract regressions covering explicit cause and implicit
+  context over six HTTP statuses. Providers' real-path regressions separately
+  verify urllib body retention in safe messages and httpx response metadata,
+  without adding a transport dependency or Ollama policy to Core. Documented the
+  existing chain limit and metadata contract. Verification: focused classifier/
+  adapter 75 passed; full Core 821 passed, 1 skipped; focused Ollama 88 passed;
+  full Providers 197 passed. Compilation and git diff --check passed in both
+  repositories. No live inference; no production correction or follow-up needed.

@@ -1,14 +1,12 @@
 """Focused coverage for formula-preserving XLSX and ODS reads."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from xml.etree import ElementTree
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from odf.opendocument import OpenDocumentSpreadsheet
-from odf.table import Table, TableCell, TableRow
-from odf.text import P
-from openpyxl import Workbook
-from openpyxl.chart import BarChart, Reference
+import pytest
 
 from squid_core.file_readers.ods import read_ods
 from squid_core.file_readers.registry import reader_for_suffix
@@ -20,6 +18,8 @@ from squid_core.tools.builtins.read_file import execute as read_file
 def test_registry_dispatches_xlsx_and_preserves_sheet_values_and_formulas(
     tmp_path: Path,
 ) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "budget.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -48,6 +48,12 @@ def test_registry_dispatches_xlsx_and_preserves_sheet_values_and_formulas(
 def test_registry_dispatches_ods_and_preserves_sheet_values_and_formulas(
     tmp_path: Path,
 ) -> None:
+    OpenDocumentSpreadsheet = pytest.importorskip("odf.opendocument").OpenDocumentSpreadsheet
+    Table = pytest.importorskip("odf.table").Table
+    TableCell = pytest.importorskip("odf.table").TableCell
+    TableRow = pytest.importorskip("odf.table").TableRow
+    P = pytest.importorskip("odf.text").P
+
     source = tmp_path / "forecast.ods"
     document = OpenDocumentSpreadsheet()
     data = Table(name="Forecast")
@@ -81,6 +87,10 @@ def test_registry_dispatches_ods_and_preserves_sheet_values_and_formulas(
 
 
 def test_xlsx_chart_is_ignored_without_crashing_read(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+    BarChart = pytest.importorskip("openpyxl.chart").BarChart
+    Reference = pytest.importorskip("openpyxl.chart").Reference
+
     source = tmp_path / "chart.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -103,8 +113,8 @@ def test_xlsx_chart_is_ignored_without_crashing_read(tmp_path: Path) -> None:
 
 def test_spreadsheet_reads_reject_text_ranges(tmp_path: Path) -> None:
     source = tmp_path / "simple.xlsx"
-    workbook = Workbook()
-    workbook.save(source)
+    with ZipFile(source, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("content.txt", "fixture")
 
     result = read_file(
         tmp_path,
@@ -117,6 +127,8 @@ def test_spreadsheet_reads_reject_text_ranges(tmp_path: Path) -> None:
 
 
 def test_spreadsheet_text_uses_full_read_head_tail_truncation(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "long.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -140,6 +152,8 @@ def test_spreadsheet_text_uses_full_read_head_tail_truncation(tmp_path: Path) ->
 
 
 def test_xlsx_can_select_one_sheet(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "departments.xlsx"
     workbook = Workbook()
     workbook.active.title = "North"
@@ -157,6 +171,11 @@ def test_xlsx_can_select_one_sheet(tmp_path: Path) -> None:
 
 
 def test_ods_can_select_one_sheet(tmp_path: Path) -> None:
+    OpenDocumentSpreadsheet = pytest.importorskip("odf.opendocument").OpenDocumentSpreadsheet
+    Table = pytest.importorskip("odf.table").Table
+    TableCell = pytest.importorskip("odf.table").TableCell
+    TableRow = pytest.importorskip("odf.table").TableRow
+
     source = tmp_path / "departments.ods"
     document = OpenDocumentSpreadsheet()
     north = Table(name="North")
@@ -176,6 +195,8 @@ def test_ods_can_select_one_sheet(tmp_path: Path) -> None:
 
 
 def test_xlsx_row_selection_is_source_based_and_inclusive(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "rows.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -203,6 +224,11 @@ def test_xlsx_row_selection_is_source_based_and_inclusive(tmp_path: Path) -> Non
 
 
 def test_ods_row_selection_is_source_based_and_inclusive(tmp_path: Path) -> None:
+    OpenDocumentSpreadsheet = pytest.importorskip("odf.opendocument").OpenDocumentSpreadsheet
+    Table = pytest.importorskip("odf.table").Table
+    TableCell = pytest.importorskip("odf.table").TableCell
+    TableRow = pytest.importorskip("odf.table").TableRow
+
     source = tmp_path / "rows.ods"
     document = OpenDocumentSpreadsheet()
     data = Table(name="Data")
@@ -227,6 +253,8 @@ def test_ods_row_selection_is_source_based_and_inclusive(tmp_path: Path) -> None
 
 
 def test_unknown_sheet_returns_structured_error(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "simple.xlsx"
     workbook = Workbook()
     workbook.active.title = "Known"
@@ -244,8 +272,8 @@ def test_unknown_sheet_returns_structured_error(tmp_path: Path) -> None:
 
 def test_spreadsheet_selection_arguments_are_validated(tmp_path: Path) -> None:
     source = tmp_path / "simple.xlsx"
-    workbook = Workbook()
-    workbook.save(source)
+    with ZipFile(source, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("content.txt", "fixture")
 
     assert read_file(
         tmp_path,
@@ -277,6 +305,8 @@ def test_spreadsheet_arguments_are_rejected_for_text_files(tmp_path: Path) -> No
 
 
 def test_targeted_rows_recover_content_omitted_from_large_workbook(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "long.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -313,6 +343,8 @@ def test_targeted_rows_recover_content_omitted_from_large_workbook(tmp_path: Pat
 
 
 def test_xlsx_formula_shows_cached_value_without_recalculation(tmp_path: Path) -> None:
+    Workbook = pytest.importorskip("openpyxl").Workbook
+
     source = tmp_path / "cached-formula.xlsx"
     workbook = Workbook()
     sheet = workbook.active
@@ -344,7 +376,8 @@ def test_shared_container_safety_preserves_spreadsheet_failures(
     malformed_result = read_file(tmp_path, str(malformed))
 
     source = tmp_path / "bounded.xlsx"
-    Workbook().save(source)
+    with ZipFile(source, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("content.txt", "fixture")
     monkeypatch.setattr(
         spreadsheet, "MAX_SPREADSHEET_BYTES", source.stat().st_size - 1
     )
@@ -362,6 +395,11 @@ def test_shared_container_safety_preserves_spreadsheet_failures(
 
 def _ods_row(*values: object) -> TableRow:
     """Build a simple ODS row with portable displayed text and typed values."""
+    Table = pytest.importorskip("odf.table").Table
+    TableCell = pytest.importorskip("odf.table").TableCell
+    TableRow = pytest.importorskip("odf.table").TableRow
+    P = pytest.importorskip("odf.text").P
+
 
     row = TableRow()
     for value in values:

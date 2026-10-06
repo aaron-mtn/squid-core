@@ -71,9 +71,17 @@ def read_epub(context: FileReadContext) -> dict:
     if container_error is not None:
         return container_error
 
+    # Import failures describe installation, not the validity of the input.
     try:
         from epub_utils import Document
+    except ImportError:
+        return _epub_error(
+            context.path,
+            'EPUB support requires optional document dependencies. '
+            'Install with: pip install "squid-core[documents]"',
+        )
 
+    try:
         document = Document(context.file_path)
         book = _parse_book(document)
         content = _render_book(book)

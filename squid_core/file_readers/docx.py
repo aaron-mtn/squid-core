@@ -33,9 +33,17 @@ def read_docx(context: FileReadContext) -> dict:
     if container_error is not None:
         return container_error
 
+    # Import failures describe installation, not the validity of the input.
     try:
         from docx import Document
+    except ImportError:
+        return _docx_error(
+            context.path,
+            'DOCX support requires optional document dependencies. '
+            'Install with: pip install "squid-core[documents]"',
+        )
 
+    try:
         document = Document(context.file_path)
         blocks = _parse_document(document)
         content = _render_document(blocks)

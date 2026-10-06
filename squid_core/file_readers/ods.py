@@ -21,10 +21,18 @@ def read_ods(context: FileReadContext) -> dict:
     if validation_error is not None:
         return validation_error
 
+    # Import failures describe installation, not the validity of the input.
     try:
         from odf.opendocument import load
         from odf.table import Table
+    except ImportError:
+        return spreadsheet_error(
+            context.path,
+            'ODS support requires optional document dependencies. '
+            'Install with: pip install "squid-core[documents]"',
+        )
 
+    try:
         document = load(str(context.file_path))
         sheets = [
             _read_table(table)

@@ -12,6 +12,8 @@ from squid_core.tools.builtins.read_file import execute as read_file
 
 
 def test_registry_dispatches_epub_and_renders_epub3_semantics(tmp_path: Path) -> None:
+    pytest.importorskip("epub_utils")
+
     source = tmp_path / "semantic.epub"
     _write_epub3(source)
 
@@ -61,6 +63,8 @@ def test_registry_dispatches_epub_and_renders_epub3_semantics(tmp_path: Path) ->
 
 
 def test_epub2_metadata_and_spine_are_supported(tmp_path: Path) -> None:
+    pytest.importorskip("epub_utils")
+
     source = tmp_path / "legacy.epub"
     _write_epub2(source)
 
@@ -75,6 +79,8 @@ def test_epub2_metadata_and_spine_are_supported(tmp_path: Path) -> None:
 
 
 def test_epub_uses_text_truncation_and_targeted_ranges(tmp_path: Path) -> None:
+    pytest.importorskip("epub_utils")
+
     source = tmp_path / "long.epub"
     paragraphs = "".join(f"<p>paragraph-{number}</p>" for number in range(1, 21))
     _write_epub3(source, first_body=paragraphs, second_body="")
@@ -108,6 +114,7 @@ def test_epub_rejects_malformed_container_and_document(tmp_path: Path) -> None:
     assert read_file(tmp_path, str(malformed))["error"] == (
         "invalid or unreadable EPUB container"
     )
+    pytest.importorskip("epub_utils")
     assert read_file(tmp_path, str(not_epub))["error"] == (
         "invalid or unreadable EPUB document"
     )
@@ -159,6 +166,8 @@ def test_epub_parser_exceptions_become_structured_failures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    pytest.importorskip("epub_utils")
+
     import epub_utils
 
     source = tmp_path / "parser.epub"
@@ -283,4 +292,12 @@ def _xhtml(body: str) -> str:
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Fixture</title></head>'
         f"<body>{body}</body></html>"
+    )
+
+
+def test_epub_malformed_container_without_parser(tmp_path: Path) -> None:
+    source = tmp_path / "malformed.epub"
+    source.write_bytes(b"not a zip")
+    assert read_file(tmp_path, str(source))["error"] == (
+        "invalid or unreadable EPUB container"
     )

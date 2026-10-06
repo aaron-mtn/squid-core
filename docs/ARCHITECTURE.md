@@ -9,6 +9,24 @@ BaseProvider, StreamCancelled, ModelResponse, ToolCall, TokenUsage. Native
 normalization, transport tracing, vision encoding and cancellation monitors
 remain provider-owned.
 
+Squid Core has zero required third-party Python runtime dependencies. Its
+`documents` packaging extra owns the optional runtime requirements:
+`epub-utils==0.1.0a1`, `odfpy`, `openpyxl`, `python-docx`, `Pillow`, and `PyMuPDF`.
+Readers remain Core-owned under `squid_core/file_readers/`, and the static suffix
+registry always recognizes EPUB, ODS, XLSX, DOCX, PDF, PNG, JPG/JPEG, and WebP.
+Missing parsers never cause known formats to fall through to UTF-8 decoding.
+Readers import parsers only when needed and report missing imports separately
+from malformed input, through the existing failure dictionary with
+`pip install "squid-core[documents]"` guidance. Parser-independent selection and
+container safety checks still run before parsing.
+
+`image_content` constants and descriptor helpers use only the standard library.
+`inspect_image_bytes` imports Pillow locally and raises `ImageValidationError`
+with the same extra guidance when unavailable. Session generated-image validation
+uses that same function; no cache or image integrity/decompression checks are
+relaxed. Ordinary runtime construction, text reads, provider adaptation, storage,
+hooks, Mods/Skills, compaction, and built-in schemas require no document libraries.
+
 There is one provider integration path: ModelAdapter prepares a dictionary of
 `model`, `messages`, and `tools`, then calls
 `provider.create_response(**request)`. A plain object implementing
@@ -34,6 +52,15 @@ with ModelRequestError classified as malformed_response. Core alone parses and
 validates tool arguments; malformed tool arguments still produce the existing
 controlled format-error reply. Diagnostic provider names are caller labels,
 never catalog IDs used to select behavior.
+
+Shared failure classification lives in `squid_core/model_adapter.py` through
+`model_request_error_details`. It walks up to five exceptions, preferring explicit
+causes and otherwise following unsuppressed contexts, with cycle protection.
+HTTP status and available response metadata are inspected throughout that chain;
+an outer RuntimeError does not erase transport evidence. Diagnostics are bounded
+and credential-redacted. Core does not read urllib error streams: transports that
+consume those bodies can retain useful text in their wrapper messages. Response
+objects exposing text/content can supply a separate response_body_excerpt.
 
 Code Squid -> Core; Code Squid -> Providers -> small Core contracts.
 Each package lives in a sibling Git repository. Source is under the underscore

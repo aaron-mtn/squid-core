@@ -7,8 +7,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, UnidentifiedImageError
-
 
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_IMAGE_PIXELS = 40_000_000
@@ -35,7 +33,7 @@ _SUFFIX_FORMATS = {
 
 
 class ImageValidationError(ValueError):
-    """Report an image that is unsupported, corrupt, or unsafe to decode."""
+    """Report unavailable image support or an unsupported, corrupt, or unsafe image."""
 
 
 def inspect_image_bytes(data: bytes, source_suffix: str) -> dict[str, Any]:
@@ -50,6 +48,16 @@ def inspect_image_bytes(data: bytes, source_suffix: str) -> dict[str, Any]:
     expected_format = _SUFFIX_FORMATS.get(suffix)
     if expected_format is None:
         raise ImageValidationError(f"unsupported image extension: {source_suffix}")
+
+    # Core imports and descriptor helpers must work without the documents extra.
+    # Resolve Pillow only when bytes actually need its integrity/safety checks.
+    try:
+        from PIL import Image, UnidentifiedImageError
+    except ImportError as error:
+        raise ImageValidationError(
+            'Image support requires optional document dependencies. '
+            'Install with: pip install "squid-core[documents]"'
+        ) from error
 
     try:
         with warnings.catch_warnings():

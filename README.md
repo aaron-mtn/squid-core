@@ -2,6 +2,26 @@
 
 See [architecture](docs/ARCHITECTURE.md) for ownership/public seams.
 
+Squid Core has zero required third-party Python runtime dependencies. The base
+install supports the agent runtime, host-supplied providers, storage, hooks,
+Mods/Skills, compaction, built-in tools, and UTF-8/plain-text reading:
+
+```bash
+pip install squid-core
+```
+
+For EPUB, ODS, XLSX, DOCX, PDF, and supported PNG, JPG/JPEG, and WebP images:
+
+```bash
+pip install "squid-core[documents]"
+```
+
+These are the package installation commands once published. For this unpublished
+checkout, use `python -m pip install -e .` or
+`python -m pip install -e ".[documents]"`. Missing optional libraries produce a
+normal read/validation failure with the extra's install command. Generated-image
+validation also requires the extra; image safety checks remain enabled.
+
 A custom backend needs only one method; subclassing `BaseProvider` is optional:
 
 ```python
@@ -39,5 +59,6 @@ python -m pytest ../squid-providers/tests
 
 Run suites separately to avoid duplicate module names. For this repository
 alone, install requirements-dev.txt to obtain its local editable dependencies
-and pytest. Build with `python -m pip wheel --no-deps .`; install required local
+and pytest; add `python -m pip install -e ".[documents]"` to run document/image
+parser tests (otherwise those tests skip). Build with `python -m pip wheel --no-deps .`; install required local
 wheels together. No inference is needed for tests.
