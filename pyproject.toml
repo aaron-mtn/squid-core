@@ -5,7 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "squid-core"
 version = "0.1.0"
-description = "Reusable agent runtime"
+description = "A reusable Python runtime for building tool-using AI agents."
+readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = []
 

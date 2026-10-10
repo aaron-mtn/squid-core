@@ -1,5 +1,36 @@
 # Squid Core Architecture
 
+Source installation and package metadata
+----------------------------------------
+
+The root `pyproject.toml` uses setuptools to package only `squid_core` and its
+subpackages. Source consumers can install the checkout normally or editably;
+no sibling repository is needed. `README.md` supplies the package's long
+description and a standalone tool-using agent example using public collaborators
+and a stdlib OpenAI-compatible transport. The example uses the script's directory
+as its workspace, detected platform context, and the full built-in tool registry.
+The root `LICENSE` contains the MIT license, referenced through the file-based
+license metadata supported by the existing `setuptools>=68` build requirement.
+These packaging and documentation files do not select providers or alter runtime
+behavior. Sibling checkouts are only a cross-repository development arrangement.
+
+`MANIFEST.in` explicitly includes `docs/ARCHITECTURE.md`, `docs/SKILLS.md`,
+the subsystem README guides, and `requirements-dev.txt` in source distributions.
+This preserves the public reference links and documented test setup in a source
+archive. README links to the architecture guide. The development log is private
+to the local workflow and explicitly excluded from source distributions along
+with generated file trees, agent instructions, caches, build outputs, and runtime
+state. It is also excluded from version control. Skills implementation remains
+`squid_core/skills.py`. The default setuptools test inclusion policy is retained.
+Wheel contents remain runtime modules and
+distribution metadata (including LICENSE): `include-package-data = false`
+prevents these source-only docs from becoming installed package data.
+
+README owns the public quickstart; private/local verification projects are not
+consumer dependencies or public setup steps. Core contains no README example
+drift checker. Ordinary required tests do not invoke live model inference.
+Runtime ownership and public contracts remain unchanged.
+
 Core owns the generic agent runtime, tools, storage, compaction, resource loading,
 and response/provider contracts. It never selects a backend or imports Code
 Squid, Providers, OpenAI, or httpx. Applications supply a ModelAdapter first,
@@ -108,6 +139,29 @@ supplied in every phase. Protected host tools precede loose resources; Mod-local
 tools/hooks precede standalone resources. Skills remain package-local. These
 resource precedence and activation rules are unchanged.
 
+Mod authoring contract and resource ownership
+--------------------------------------------
+
+Core's `squid_core/mods/` owns strict metadata validation and runtime resolution,
+not a bundled Mod Builder, authoring guide, examples, or scaffolding tools.
+Mod authoring resources and scaffolding belong to their host application.
+They can consume Core's public loaders; Core never imports a host to author
+or validate a Mod.
+
+`mod.yaml` supports exactly `name`, `description`, `default_skill`, `accent`,
+and `hooks`, with opening and closing `---` delimiters. Every package contains
+one or more direct `skills/<skill-id>/SKILL.md` children; each declares explicit
+`allowed-tools`, and `default_skill` names a packaged Skill. A one-Skill starter
+is a valid instance of this multi-Skill contract, not a separate schema.
+All packaged Skills are validated, but only the selected Skill grants tools.
+Manifest-level `tools` is rejected rather than migrated or interpreted.
+
+Custom components retain `tools/<tool-name>/tool.yaml` plus their declared Python
+entrypoint, and `hooks/<hook-name>/hook.yaml` plus `hook.py`. A component folder
+makes it available; the selected Skill's `allowed-tools` activates tools and the
+manifest's `hooks` activates Mod-wide hooks. Prompt overrides use the three
+current section names described below; no legacy section alias is accepted.
+
 Generic APIs, Session/ToolExecutor attributes, Hook contexts, saved-tool execution
 contexts, and run-started events call the filesystem working root
 `workspace_root`. It need not contain Git metadata. This pre-release rename
@@ -123,9 +177,8 @@ session replay, and undo lifecycle behavior are unchanged.
 `PromptDefaults.agent_identity` supplies the identity override default. The
 three fixed Skill/Mod prompt sections are `AGENT_IDENTITY`,
 `TOOL_USAGE_GUIDANCE`, and `FINAL_SUMMARY_REQUIREMENTS`; each supports literal
-`append` and `replace`. This pre-release rename replaces `SYSTEM_PROMPT_INTRO`
-and `PromptDefaults.system_prompt_intro` directly, without compatibility aliases.
-Current resources and consumers must use the new names.
+`append` and `replace`. Current resources and consumers must use these names;
+no legacy section or field aliases are accepted.
 
 Core protects only the tool-call versus non-empty final-response protocol,
 batching and result-dependent sequencing, finishing on completion, generic

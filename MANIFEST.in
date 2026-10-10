@@ -1,0 +1,23 @@
+# Keep the complete public reference set in source archives, outside wheel data.
+include README.md LICENSE requirements-dev.txt
+prune docs
+include docs/ARCHITECTURE.md docs/SKILLS.md
+recursive-include squid_core README.md
+
+# Private workflow files must stay excluded even if setuptools discovery changes.
+exclude AGENTS.md .gitignore
+prune .code-squid
+prune .venv
+prune venv
+prune env
+prune build
+prune dist
+prune .git
+prune .idea
+prune .vscode
+prune .pytest_cache
+prune .mypy_cache
+prune .ruff_cache
+prune htmlcov
+global-exclude __pycache__ *.py[cod] .env .env.* .coverage .coverage.*
+global-exclude filetree.md FILETREE.md dev-log.md provider-extraction.md
