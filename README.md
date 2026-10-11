@@ -1,74 +1,58 @@
 # Squid Core
 
-Squid Core is a reusable Python runtime for building tool-using AI agents. It
-coordinates model responses, tool execution, and conversation state so you can
-build your own agent application around a model backend of your choice.
+Squid Core contains the building blocks needed to build custom AI agents.
 
-Use it when you want an agent loop with tools, sessions/storage, compaction,
-hooks, and Skills/Mods without adopting a particular application or provider.
-The base package has zero required third-party Python runtime dependencies.
+It handles the back-and-forth between the model and tools, keeps track of the
+session, and provides the systems used to customize how an agent behaves.
 
-Core is provider-agnostic: your application supplies the provider, model, and
-presentation. It does not require Code Squid, `squid-providers`, the OpenAI SDK,
-or httpx.
+While building Code Squid, I wanted its core systems to be reusable for other
+kinds of agents instead of being tied only to coding. I built them with that
+separation in mind, and Squid Core is the result of pulling those systems out
+into their own package.
 
-Code Squid is an application built on Core; `squid-providers` contains optional
-first-party provider integrations. These projects are developed as sibling
-repositories, but Squid Core installs and works independently.
+Squid Core has an extension system called Mods, which can bundle Skills, tools,
+and hooks together.
+
+Squid Core does not depend on a particular model provider or interface. You can
+connect your own provider, choose the tools and behavior you want, and build a
+different kind of agent on top of it.
+
+The base package has no required third-party Python dependencies.
+
+Code Squid is built on Squid Core. `squid-providers` contains the first-party
+model integrations used by Code Squid, but Squid Core itself can be used without
+either one.
 
 ## Installation
 
-Python 3.11 or newer is required. From a checked-out copy of this repository:
+Squid Core requires Python 3.11 or newer.
+
+Install from PyPI:
 
 ```bash
-python -m pip install .
+pip install squid-core
 ```
 
-For an editable development install:
+For optional document and image reading support:
 
 ```bash
-python -m pip install -e .
+pip install "squid-core[documents]"
 ```
 
-To install directly from GitHub, replace `<owner>` with the repository owner
-and `v0.1.0` with an available release tag:
+The `documents` extra adds support for reading EPUB, ODS, XLSX, DOCX, PDF, PNG, JPG/JPEG, and WebP files.
 
-```bash
-python -m pip install "git+https://github.com/<owner>/squid-core.git@v0.1.0"
-```
+## Quick start
 
-This release does not assume PyPI publication.
+This example runs a small tool-using agent against a local model in LM Studio.
 
-The base install includes the runtime, built-in tools, and UTF-8/plain-text
-reading. For EPUB, ODS, XLSX, DOCX, PDF, and supported PNG, JPG/JPEG, and WebP
-images, install the optional `documents` extra:
-
-```bash
-python -m pip install ".[documents]"
-# Editable equivalent:
-python -m pip install -e ".[documents]"
-```
-
-Missing optional libraries produce a normal read/validation failure with install
-guidance. Generated-image validation also requires the extra; image safety
-checks remain enabled.
-
-## Run a complete agent
-
-Save this as `hello_core.py` in the directory you want the agent to work in.
-It uses Core and the Python standard library to call an OpenAI-compatible
-`/chat/completions` endpoint and execute real tools. Start a local model server
-with a tool-calling model loaded, then set `SQUID_BASE_URL` to its API base URL
-(including `/v1`) and `SQUID_MODEL` to the loaded model ID. This minimal provider
-uses non-streaming text/tool responses and an endpoint that needs no API key.
+Start LM Studio's local server with a tool-calling model loaded, then save the
+following as `hello_squid.py`:
 
 ```python
-"""Run a tool-using Squid Core agent in the directory containing this script."""
-
 import json
 import os
-from pathlib import Path
 import urllib.request
+from pathlib import Path
 
 from squid_core.agent import Agent
 from squid_core.agent_loop import AgentLoop
@@ -85,168 +69,199 @@ MODEL = os.environ["SQUID_MODEL"]
 
 
 class ChatProvider:
-    """Translate OpenAI-compatible chat completions into Core responses."""
-
     def create_response(self, model, messages, tools) -> ModelResponse:
-        """Send the conversation and preserve the model's raw tool arguments."""
+        # Send Squid Core's conversation and tool definitions to LM Studio.
         request = urllib.request.Request(
             BASE_URL + "/chat/completions",
             data=json.dumps({
-                "model": model, "messages": messages, "tools": tools,
+                "model": model,
+                "messages": messages,
+                "tools": tools,
             }).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+
+        # Pull the assistant message out of the OpenAI-compatible response.
         with urllib.request.urlopen(request, timeout=120) as response:
             message = json.load(response)["choices"][0]["message"]
-        # Core owns argument parsing, execution, and tool-result replay.
-        calls = [
-            ToolCall(call["id"], call["function"]["name"],
-                     call["function"]["arguments"])
+
+        # Convert LM Studio's OpenAI-compatible response into Squid Core's format.
+        tool_calls = [
+            ToolCall(
+                call["id"],
+                call["function"]["name"],
+                call["function"]["arguments"],
+            )
             for call in message.get("tool_calls") or []
         ]
-        return ModelResponse(content=message.get("content"), tool_calls=calls)
+
+        return ModelResponse(
+            content=message.get("content"),
+            tool_calls=tool_calls,
+        )
 
 
+# Use the folder containing this script as the agent's workspace.
 workspace = Path(__file__).resolve().parent
+
+# Tell Squid Core what OS, shell, and path conventions it is working with.
 platform_context = detect_platform_context()
+
+# Session stores the conversation and tool results for this run.
 session = Session(workspace)
-print(f"Workspace: {workspace}")
+
 task = input("You: ")
 
-# Advertise and execute the same registry, using normal Core defaults.
+# Define the agent's task and which tools it is allowed to use.
+agent = Agent(
+    task,
+    tools=TOOLS,
+    platform_context=platform_context,
+    workspace=str(workspace),
+)
+
+# ToolExecutor is the part that actually runs tool calls.
+tool_executor = ToolExecutor(
+    workspace,
+    session,
+    tools=TOOLS,
+    platform_context=platform_context,
+)
+
+# AgentLoop handles the back-and-forth between the model and tools.
 loop = AgentLoop(
     session=session,
-    agent=Agent(task, tools=TOOLS, platform_context=platform_context,
-                workspace=str(workspace)),
+    agent=agent,
     model_adapter=ModelAdapter(ChatProvider(), MODEL),
-    tool_executor=ToolExecutor(
-        workspace, session, tools=TOOLS, platform_context=platform_context,
-    ),
+    tool_executor=tool_executor,
     tool_results=ToolResults(),
     display=NullDisplay(),
 )
 
 result = loop.run()
+
 if result.status != "complete":
     raise RuntimeError(result.reason or result.status)
+
 print(session.messages[-1]["content"])
 ```
 
-For example, in PowerShell (replace `your-model-id`):
+Set the `SQUID_MODEL` environment variable to the model you have loaded in LM Studio,
+then run the script. This example uses PowerShell:
 
 ```powershell
-$env:SQUID_BASE_URL = "http://127.0.0.1:1234/v1"
 $env:SQUID_MODEL = "your-model-id"
-python hello_core.py
+python hello_squid.py
 ```
 
-Or in a POSIX shell:
+The directory containing `hello_squid.py` is used as the workspace.
 
-```bash
-export SQUID_BASE_URL="http://127.0.0.1:1234/v1"
-export SQUID_MODEL="your-model-id"
-python hello_core.py
+Once it starts, you can give it a task like:
+
+```text
+Read hello_squid.py and tell me what this thing is doing.
 ```
 
-At the `You:` prompt, try: `Read hello_core.py with read_file and summarize how
-the provider works.` The workspace stays the script's directory even when you
-launch it from elsewhere. All four built-in tools are enabled, including file
-editing and local command execution.
-
-`Session` holds the transcript, `ModelAdapter` connects the provider to Core,
-and `AgentLoop` runs until the agent completes. `NullDisplay` provides silent
-presentation; the example prints the final message itself and keeps the session
-in memory.
+The agent has access to Squid Core's four built-in tools: `read_file`, `write_file`,
+`apply_patch`, and `run_command`.
 
 ## Bring your own provider
 
-Normal inference requires just
-`create_response(model, messages, tools) -> ModelResponse` on a provider object.
-Core calls it with keyword arguments. Subclassing
-`squid_core.providers.BaseProvider` is optional.
+Squid Core does not care which model provider you use.
 
-The provider receives the model name, conversation messages, and a list of tool
-definitions. Translate your backend's native results into Core's `ModelResponse`,
-`ToolCall`, and `TokenUsage` contracts from `squid_core.model_response`. Tool
-calls carry raw JSON argument strings; Core parses and validates those arguments.
-Return Core contracts rather than SDK response objects or dictionaries.
+For a basic provider, you only need one method:
 
-Streaming, readiness checks, model discovery, and vision are optional
-capabilities. Concrete integrations can live in a separate package, including
-the optional first-party `squid-providers` repository. See the
-[provider contracts in the architecture docs](docs/ARCHITECTURE.md) for details.
+```python
+create_response(model, messages, tools) -> ModelResponse
+```
+
+Squid Core gives your provider the model name, the conversation, and the tools
+the agent can use. Your provider sends that to the model and gives Squid Core
+back a `ModelResponse`.
+
+If the model wants to call a tool, return those calls as `ToolCall` objects.
+Squid Core handles parsing the arguments and running the tool.
+
+Your provider can inherit from `BaseProvider`, but it does not need to.
+
+Things like streaming, model discovery, readiness checks, and vision are optional.
+You can add them if your provider supports them.
+
+Code Squid's built-in provider integrations live in `squid-providers`.
 
 ## Tools and workspaces
 
-Core's built-in registry, exported as `squid_core.tools.TOOLS`, contains:
+Squid Core comes with four built-in tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `read_file` | Read text and supported documents/images. |
-| `write_file` | Write file contents. |
-| `apply_patch` | Apply structured file edits. |
-| `run_command` | Execute a local shell command. |
+| `read_file` | Reads text, code, and supported documents and images. |
+| `write_file` | Creates or replaces files. |
+| `apply_patch` | Makes targeted edits to existing files. |
+| `run_command` | Runs local shell commands. |
 
-For `Agent`, `ToolExecutor`, and Core's run-construction helpers, `tools=None`
-selects Core's built-ins, `tools={}` disables tools, and an explicit mapping uses
-that supplied registry without merging in built-ins. Applications can provide
-custom tools. A selected Skill can further restrict the Agent's permitted tools.
-Supply the same resolved registry to the agent and executor: the agent advertises
-definitions and the executor dispatches calls.
+These are available through `squid_core.tools.TOOLS`. You can use the built-in
+set, replace it with your own tools, or add custom tools alongside them.
 
-The workspace is a filesystem working root, not necessarily a Git repository.
-Structured file tools require absolute paths. A directly constructed executor
-rejects outside paths by default, but `AgentLoop`'s default `never` approval policy
-permits them through preflight. `run_command` uses the workspace as its initial
-working directory; Windows uses the selected PowerShell executable, while POSIX
-uses the default subprocess shell. It is not a filesystem sandbox.
-`detect_platform_context()` supplies OS, shell, and path information for prompts
-and command execution, as shown above.
-Applications choose the workspace and tool access, and can supply storage for
-durable sessions.
+A workspace is just the folder the agent is working in. It can be any folder.
 
-## Core concepts and next steps
+`run_command` starts in the workspace, and the file tools use it as the main
+working area for file operations.
 
-- `Agent`: task, prompt assembly, tool selection, and completion rules.
-- `AgentLoop`: model/tool turns and run lifecycle.
-- `ModelAdapter`: provider requests and response normalization.
-- `Session`: conversation state and tool side effects.
-- `ToolExecutor`: tool dispatch and execution guards.
-- `ToolResults`: tool-result formatting for conversation messages.
-- Hooks: host-supplied callbacks at lifecycle seams.
-- Skills/Mods: packaged instructions, tool permissions, and custom resources.
+The workspace is not a security sandbox. Tool access and file access are controlled
+by the tools and settings you give the agent.
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for ownership, public seams,
-runtime flow, resource layouts, and safety invariants.
+## Skills and Mods
 
-## Development and testing
+Skills change how an agent behaves for a particular kind of task.
 
-From this repository, install the editable package and pytest using the existing
-development requirements, then run Core's own tests:
+A Skill can replace specific parts of the system prompt and change which tools
+the agent has access to. It can remove tools that are not useful for the task or
+make additional tools available.
+
+Mods package those pieces together. A Mod can include a Skill, custom tools, and
+hooks that run at different points while the agent is working.
+
+Mods can also define an accent color, which can be used for things like avatar
+colors and other Mod-specific visuals.
+
+## Basic Squid Core structure
+
+- `Agent` builds the prompt, tracks the task, and controls which tools the model
+  is allowed to use.
+- `AgentLoop` runs the back-and-forth between the model and tools until the task
+  finishes.
+- `ModelAdapter` sends requests through the selected provider and turns provider
+  responses into the format Squid Core expects.
+- `Session` stores the conversation history and tool results for the run.
+- `ToolExecutor` receives tool calls and runs the matching tool.
+- `ToolResults` formats tool output so it can be added back into the conversation.
+- Hooks run code at specific points while the agent is working.
+- Skills change parts of the system prompt and the tools available to the agent.
+- Mods package Skills, custom tools, hooks, and Mod metadata together.
+- Compaction keeps long sessions manageable by reducing older context.
+- Session storage saves and reloads sessions.
+- Approvals control when tool actions need permission before they run.
+- Events report what is happening during a run.
+
+## Building on Squid Core
+
+Squid Core is meant to be used as the base for other agents, not just Code Squid.
+
+You can bring your own provider, tools, Skills, Mods, hooks, prompts, and storage
+while keeping the same agent loop and session system underneath.
+
+For a deeper look at the architecture and the parts meant to be reused, see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Testing
+
+Run the test suite with:
 
 ```bash
-python -m pip install -r requirements-dev.txt
 python -m pytest tests
 ```
-
-Document/image parser tests require the optional `documents` extra (otherwise
-those tests skip). No live local or cloud model inference is required for the
-test suite.
-
-```bash
-python -m pip install -e ".[documents]"
-python -m compileall -q squid_core
-git diff --check
-```
-
-Optional cross-repository development: keep `code-squid`, `squid-core`, and
-`squid-providers` as siblings when changing the application and integrations
-together. Install each project's development requirements and run its suite
-separately to avoid duplicate test module names. Sibling checkouts are not
-required to use or test Core on its own.
-
-To build a local wheel from source, use `python -m pip wheel --no-deps .`.
 
 ## License
 
