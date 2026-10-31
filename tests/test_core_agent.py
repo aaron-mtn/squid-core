@@ -148,7 +148,7 @@ def test_programmatic_skill_nonempty_tools_are_permissions() -> None:
     PlatformContext("Windows", "PowerShell", "pwsh", "\\", True),
     PlatformContext("Linux", "bash", "/bin/bash", "/", False),
 ])
-@pytest.mark.parametrize("names", [(), ("custom",), ("read_file",), ("apply_patch",),
+@pytest.mark.parametrize("names", [(), ("custom",), ("read_file",), ("edit_file",),
                                   ("write_file",), ("run_command",), ("list_files",), ("find_files",), ("search_for_text",), tuple(TOOLS)])
 def test_environment_guidance_matches_resolved_tools(context, names) -> None:
     tools = {name: TOOLS.get(name, {}) for name in names}

@@ -434,7 +434,7 @@ def test_partial_and_suppressed_reads_are_clear_text_observations() -> None:
 def test_recent_patch_failure_keeps_recovery_identifiers_and_text() -> None:
     result = {
         "ok": False,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "path": "C:/repo/example.py",
         "error": "old_text_not_found",
         "candidates": [
@@ -450,7 +450,7 @@ def test_recent_patch_failure_keeps_recovery_identifiers_and_text() -> None:
 
     observation = _observation(
         render_messages_for_model(
-            _tool_turn("patch", "apply_patch", result),
+            _tool_turn("patch", "edit_file", result),
             ToolResultTrimmingSettings(),
         )[-1]
     )
@@ -578,10 +578,10 @@ def test_command_denial_keeps_its_failure_reason() -> None:
 def test_old_failed_patch_bounds_diagnostics_without_losing_candidate_ids() -> None:
     messages = _tool_turn(
         "patch",
-        "apply_patch",
+        "edit_file",
         {
             "ok": False,
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "path": "C:/repo/example.py",
             "error": "old_text_not_unique",
             "candidates": [
@@ -606,7 +606,7 @@ def test_old_failed_patch_bounds_diagnostics_without_losing_candidate_ids() -> N
         )[-2]
     )
     assert observation.startswith(
-        "APPLY_PATCH FAILED\npath: C:/repo/example.py\nreason: old_text_not_unique"
+        "EDIT_FILE FAILED\npath: C:/repo/example.py\nreason: old_text_not_unique"
     )
     assert "<<< CANDIDATE 1 m1 lines 10-12 >>>" in observation
     assert "[older payload truncated]" in observation
@@ -618,10 +618,10 @@ def test_successful_patch_preview_is_visible_to_the_model() -> None:
         render_messages_for_model(
             _tool_turn(
                 "patch",
-                "apply_patch",
+                "edit_file",
                 {
                     "ok": True,
-                    "tool": "apply_patch",
+                    "tool": "edit_file",
                     "path": "C:/repo/example.py",
                     "start_line": 2,
                     "end_line_after": 2,
@@ -641,7 +641,7 @@ def test_successful_patch_preview_is_visible_to_the_model() -> None:
 def test_old_successful_patch_drops_only_previews_without_mutating_result() -> None:
     canonical_result = {
         "ok": True,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "path": "C:/repo/example.py",
         "start_line": 2,
         "end_line_after": 3,
@@ -659,17 +659,17 @@ def test_old_successful_patch_drops_only_previews_without_mutating_result() -> N
 
     observation = _observation(
         render_messages_for_model(
-            _after_exposure(_tool_turn("patch", "apply_patch", canonical_result)),
+            _after_exposure(_tool_turn("patch", "edit_file", canonical_result)),
             ToolResultTrimmingSettings(recent_full_results=0),
         )[-2]
     )
 
     assert observation == (
-        "APPLY_PATCH OK\npath: C:/repo/example.py\nchanged: lines 2-3\nmatch_id: m1"
+        "EDIT_FILE OK\npath: C:/repo/example.py\nchanged: lines 2-3\nmatch_id: m1"
     )
     assert rendered_result == {
         "ok": True,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "path": "C:/repo/example.py",
         "start_line": 2,
         "end_line_after": 3,

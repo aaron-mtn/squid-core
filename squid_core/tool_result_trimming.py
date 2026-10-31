@@ -23,7 +23,7 @@ from squid_core.settings import ToolResultTrimmingSettings
 _OMITTED_MARKERS = {
     "read_file": "[older read content omitted; reread if needed]",
     "run_command": "[older command output omitted; rerun if needed]",
-    "apply_patch": "[older patch diagnostic omitted]",
+    "edit_file": "[older patch diagnostic omitted]",
     "write_file": "[older written content omitted; reread if needed]",
 }
 
@@ -199,7 +199,7 @@ def render_tool_result_for_model(
             settings.command_old_output_chars,
             name,
         )
-    if name == "apply_patch":
+    if name == "edit_file":
         if canonical_result.get("ok") is False:
             return _trim_patch_diagnostics(
                 canonical_result, settings.patch_old_diagnostic_chars
@@ -297,7 +297,7 @@ def _format_result_for_model(
         )
     if tool_name == "run_command":
         return _format_command_result(result)
-    if tool_name == "apply_patch":
+    if tool_name == "edit_file":
         return _format_patch_result(result)
     if tool_name == "write_file":
         return _format_write_result(result)
@@ -519,7 +519,7 @@ def _format_command_result(result: dict) -> str:
 
 def _format_patch_result(result: dict) -> str:
     ok = result.get("ok") is True
-    lines = [f"APPLY_PATCH {'OK' if ok else 'FAILED'}"]
+    lines = [f"EDIT_FILE {'OK' if ok else 'FAILED'}"]
     _append_scalar(lines, "path", result.get("path"))
     if ok:
         start = result.get("start_line")
@@ -764,7 +764,7 @@ def _trim_patch_diagnostics(result: dict, limit: int) -> dict:
     if not changed:
         return result
     rendered["model_diagnostic_truncated"] = True
-    rendered["model_diagnostic_note"] = _OMITTED_MARKERS["apply_patch"]
+    rendered["model_diagnostic_note"] = _OMITTED_MARKERS["edit_file"]
     return rendered
 
 

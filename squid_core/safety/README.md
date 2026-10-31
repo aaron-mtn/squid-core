@@ -161,7 +161,7 @@ outside-workspace marker for its guard.
 ### Structured file-tool boundary
 
 `workspace_boundary_reason(action, workspace_root)` checks exactly the names
-in `FILE_TOOLS = {"read_file", "write_file", "apply_patch"}`. It returns no
+in `FILE_TOOLS = {"read_file", "write_file", "edit_file"}`. It returns no
 reason for other tools, non-dictionary `args`, or a non-string `args["path"]`.
 
 Only paths that `Path(path).is_absolute()` recognizes as absolute are checked.
@@ -176,7 +176,7 @@ Relative paths produce no boundary reason here. In particular, the absolute
 path test occurs before expansion, so `~/file` does not become a checked
 absolute path in this helper. Built-in file tools separately reject relative
 file paths; that validation is not performed by this preflight helper.
-Pathless `apply_patch` candidate selection also supplies no path for this
+Pathless `edit_file` candidate selection also supplies no path for this
 helper to check. See [tools](../tools/README.md) for file validation,
 execution-time guards, and candidate-selection details.
 

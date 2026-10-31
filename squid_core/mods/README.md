@@ -247,7 +247,7 @@ global registry combining every discovered Mod:
 | Same local Skill/tool/hook IDs in separate Mods | No cross-Mod merge or collision check; lookups are scoped to the selected package. |
 | Repeated `hooks` or packaged Skill `allowed-tools` names | Validation error, not replacement or repeated activation. |
 
-`built_in_tools=None` protects Core's `read_file`, `write_file`, `apply_patch`,
+`built_in_tools=None` protects Core's `read_file`, `write_file`, `edit_file`,
 and `run_command` registry. An explicitly supplied mapping replaces that
 default protected registry; `{}` protects no built-ins and adds none.
 Use the same registry for discovery, validation, and resolution so availability

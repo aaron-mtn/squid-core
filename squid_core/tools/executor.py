@@ -9,11 +9,11 @@ from squid_core.safety.workspace_boundary import workspace_boundary_reason
 from squid_core.settings import ReadFileSettings
 
 from .builtins import TOOLS
-from .builtins.apply_patch import PatchCandidateStore
+from .builtins.edit_file import PatchCandidateStore
 
 
 BUILTIN_RUN_COMMAND = TOOLS["run_command"]["execute"]
-BUILTIN_APPLY_PATCH = TOOLS["apply_patch"]["execute"]
+BUILTIN_EDIT_FILE = TOOLS["edit_file"]["execute"]
 BUILTIN_READ_FILE = TOOLS["read_file"]["execute"]
 
 
@@ -72,18 +72,18 @@ class ToolExecutor:
             for name in ("path", "old_text", "new_text")
         )
         stored_patch_candidate = (
-            tool["execute"] is BUILTIN_APPLY_PATCH
+            tool["execute"] is BUILTIN_EDIT_FILE
             and isinstance(args.get("match_id"), str)
             and self.patch_candidates.get(args["match_id"]) is not None
         )
         candidate_selection = stored_patch_candidate or (
-            tool["execute"] is BUILTIN_APPLY_PATCH
+            tool["execute"] is BUILTIN_EDIT_FILE
             and isinstance(args.get("match_id"), str)
             and not normal_patch_args_complete
         )
         if candidate_selection:
             # Candidate selection is pathless semantically. A redundant caller path
-            # is checked against the stored target by apply_patch, not trusted here.
+            # is checked against the stored target by edit_file, not trusted here.
             boundary_action = {**action, "args": {"match_id": args["match_id"]}}
 
         outside_workspace_approved = bool(action.get("outside_workspace_approved"))
@@ -98,7 +98,7 @@ class ToolExecutor:
 
         provisional_snapshot_path = None
         try:
-            if self.undo_store is not None and tool_name in {"write_file", "apply_patch"}:
+            if self.undo_store is not None and tool_name in {"write_file", "edit_file"}:
                 if candidate_selection:
                     # The retained candidate stays authoritative even when the model
                     # redundantly supplies a path in the selection call.
@@ -118,7 +118,7 @@ class ToolExecutor:
                     "platform_context": self.platform_context,
                     "should_cancel": self.should_cancel,
                 }
-            elif tool["execute"] is BUILTIN_APPLY_PATCH:
+            elif tool["execute"] is BUILTIN_EDIT_FILE:
                 execute_args = {**args, "candidate_store": self.patch_candidates}
             elif tool["execute"] is BUILTIN_READ_FILE:
                 image_input_supported = None
@@ -165,7 +165,7 @@ class ToolExecutor:
             if path:
                 self.session.mark_file_read(path)
 
-        if tool_name in {"write_file", "apply_patch"}:
+        if tool_name in {"write_file", "edit_file"}:
             path = result.get("path")
             if path:
                 self.patch_candidates.invalidate_path(path)

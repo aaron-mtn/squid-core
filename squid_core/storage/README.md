@@ -270,7 +270,7 @@ use consistent path spelling.
 `discard_snapshot(path)` removes a record and its stored copy if present.
 `discard_snapshot_if_unchanged(path)` does so only when current bytes equal the
 snapshot, or a previously nonexistent target still does not exist. ToolExecutor
-snapshots `write_file` and `apply_patch` targets before execution and uses this
+snapshots `write_file` and `edit_file` targets before execution and uses this
 conditional discard for newly captured snapshots after failed actions. It does
 not snapshot arbitrary command side effects. See [tools](../tools/README.md) for
 tool execution details.

@@ -564,7 +564,8 @@ def test_recovered_session_can_append_and_reload_after_truncated_tail(
     assert read_metadata(reloaded)["active_leaf_id"] == new_entry["id"]
 
 
-def test_load_messages_repairs_trailing_unmatched_tool_call_once(tmp_path: Path) -> None:
+@pytest.mark.parametrize("tool_name", ["read_file", "apply_patch"])
+def test_load_messages_repairs_trailing_unmatched_tool_call_once(tmp_path: Path, tool_name: str) -> None:
     store = SessionStore.create(tmp_path, "repair trailing tool")
     store.append_message(
         {
@@ -574,7 +575,7 @@ def test_load_messages_repairs_trailing_unmatched_tool_call_once(tmp_path: Path)
                 {
                     "id": "call_old",
                     "type": "function",
-                    "function": {"name": "read_file", "arguments": "{}"},
+                    "function": {"name": tool_name, "arguments": "{}"},
                 }
             ],
         }
@@ -587,6 +588,8 @@ def test_load_messages_repairs_trailing_unmatched_tool_call_once(tmp_path: Path)
     assert first_load[-1]["role"] == "tool"
     assert first_load[-1]["tool_call_id"] == "call_old"
     assert json.loads(first_load[-1]["content"])["recovered"] is True
+
+    assert json.loads(first_load[-1]["content"])["tool"] == tool_name
 
 
 def test_append_compaction_event_writes_first_class_jsonl_entry(tmp_path: Path) -> None:
@@ -803,3 +806,18 @@ def test_duplicate_session_id_gets_suffix_instead_of_overwriting(
         r"20260514-153012-fix-formatter-underscore-bug-[0-9a-f]{4}",
         read_metadata(second)["session_id"],
     )
+
+
+def test_historical_edit_messages_replay_without_rewriting(tmp_path: Path) -> None:
+    store = SessionStore.create(tmp_path, "Historical edit", workspace_root=tmp_path)
+    messages = [
+        {"role": "assistant", "tool_calls": [{"id": "old-edit", "type": "function",
+         "function": {"name": "apply_patch", "arguments": '{"path": "old.txt"}'}}]},
+        {"role": "tool", "tool_call_id": "old-edit",
+         "content": json.dumps({"tool": "apply_patch", "ok": True})},
+    ]
+    for message in messages:
+        store.append_message(message)
+    original = store.jsonl_path.read_bytes()
+    assert SessionStore.open(store.session_dir).load_messages() == messages
+    assert store.jsonl_path.read_bytes() == original

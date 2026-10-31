@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-FILE_TOOLS = {"read_file", "write_file", "apply_patch"}
+FILE_TOOLS = {"read_file", "write_file", "edit_file"}
 
 
 def is_inside_workspace(path: Path, workspace_root: Path) -> bool:

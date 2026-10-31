@@ -291,3 +291,24 @@ def test_iterator_failure_retains_searchable_directory_prefix(tmp_path, monkeypa
     result = search.execute(tmp_path, 'hit')
     assert result['matches'] == [{'path': good, 'line_number': 1, 'text': 'hit'}]
     assert result['truncation_reason'] == 'traversal_error'
+
+
+@pytest.mark.parametrize('prefix', ['', 'hit\n'])
+@pytest.mark.parametrize('content', ['hit', 'hit\n', 'hit\r\n', 'hit \u00e9'])
+def test_exact_byte_budget_retains_completed_file(tmp_path, monkeypatch, content, prefix):
+    earlier = write(tmp_path, 'a', prefix) if prefix else None
+    path = write(tmp_path, 'file', content)
+    monkeypatch.setattr(search, 'MAX_TOTAL_BYTES', len((prefix + content).encode('utf-8')))
+    result = search.execute(tmp_path, 'hit')
+    expected = [{'path': earlier, 'line_number': 1, 'text': 'hit'}] if prefix else []
+    expected.append({'path': path, 'line_number': 1, 'text': content.rstrip('\r\n')})
+    assert result['matches'] == expected
+    assert not result['truncated']
+
+
+def test_exact_byte_budget_still_finalizes_utf8(tmp_path, monkeypatch):
+    write(tmp_path, 'file', b'hit\n\xc3')
+    monkeypatch.setattr(search, 'MAX_TOTAL_BYTES', 5)
+    result = search.execute(tmp_path, 'hit')
+    assert result['matches'] == []
+    assert not result['truncated']

@@ -10,7 +10,7 @@ from squid_core.model_adapter import (
     ModelRequestError,
     model_request_error_details,
 )
-from squid_core.tools.builtins.apply_patch import tool_definition as apply_patch_definition
+from squid_core.tools.builtins.edit_file import tool_definition as edit_file_definition
 from squid_core.tools.builtins.run_command import tool_definition as run_command_definition
 
 
@@ -334,8 +334,8 @@ def test_run_command_rejects_non_boolean_verification_before_execution(
 )
 def test_tool_call_accepts_each_required_argument_variant(arguments: str) -> None:
     reply = adapter_response(
-        FakeToolCall("call_1", "apply_patch", arguments),
-        [apply_patch_definition()],
+        FakeToolCall("call_1", "edit_file", arguments),
+        [edit_file_definition()],
     )
 
     assert reply["format_error"] == ""
@@ -344,13 +344,13 @@ def test_tool_call_accepts_each_required_argument_variant(arguments: str) -> Non
 
 def test_tool_call_rejects_arguments_missing_every_required_variant() -> None:
     reply = adapter_response(
-        FakeToolCall("call_1", "apply_patch", '{"path": "/tmp/input.txt"}'),
-        [apply_patch_definition()],
+        FakeToolCall("call_1", "edit_file", '{"path": "/tmp/input.txt"}'),
+        [edit_file_definition()],
     )
 
     assert reply["actions"] == []
     assert reply["format_error"] == (
-        "Arguments for apply_patch must include one of: "
+        "Arguments for edit_file must include one of: "
         "(path, old_text, new_text) or (match_id)"
     )
 

@@ -35,7 +35,7 @@ the Agent and executor (for example, pass `agent.tools` to the executor).
 | --- | --- |
 | `read_file` | Requires absolute `path`. Reads UTF-8 text, DOCX, EPUB, XLSX, ODS, PDF, and PNG/JPG/JPEG/WebP images through the file-reader subsystem. Optional `ranges` select 1-based inclusive text lines (`start_line`, `end_line`); `pages` select PDF pages (`start_page`, `end_page`); `sheet` and `rows` (`start_row`, `end_row`) select spreadsheet content. Images are whole-image reads. Reader limits, optional-library availability, image capability checks, and storage collaborators affect results. Unknown suffixes fall back to UTF-8 text. |
 | `write_file` | Requires absolute `path` and full `content`. Creates or replaces a UTF-8 file; parent directories must already exist. Returns character-count metadata. |
-| `apply_patch` | Takes absolute `path`, `old_text`, and `new_text` to replace exactly one occurrence in an existing UTF-8 file. Missing or ambiguous matches return diagnostics rather than editing. The executor retains run-local candidates; a subsequent `match_id` call selects a candidate and revalidates its exact text at the stored offset. Successful writes invalidate candidates for that path. This is text replacement, not unified-diff application. |
+| `edit_file` | Takes absolute `path`, `old_text`, and `new_text` to replace exactly one occurrence in an existing UTF-8 file. Missing or ambiguous matches return diagnostics rather than editing. The executor retains run-local candidates; a subsequent `match_id` call selects a candidate and revalidates its exact text at the stored offset. Successful writes invalidate candidates for that path. This is text replacement, not unified-diff application. |
 | `run_command` | Requires `command` and boolean `verification`. Runs a shell command from the workspace root, returning combined stdout/stderr, return code, and output truncation metadata. `verification` labels whether the command checks task results; it does not change command execution. |
 
 ## Execution and model-visible results
@@ -68,7 +68,7 @@ Path; direct executor callers should supply an absolute Path themselves.
 The three structured file tools require absolute paths and use those paths
 directly, rather than joining them to the workspace. The executor rejects targets
 outside the resolved workspace by default (including resolved symlink targets).
-The guard is keyed to `read_file`, `write_file`, and `apply_patch`; arbitrary
+The guard is keyed to `read_file`, `write_file`, and `edit_file`; arbitrary
 custom tool names receive no automatic filesystem boundary. Calling a built-in
 execution function directly also bypasses the executor guard.
 

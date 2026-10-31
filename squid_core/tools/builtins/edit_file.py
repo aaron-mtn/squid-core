@@ -1,4 +1,4 @@
-"""Own apply_patch diagnostics and exact, revalidated replacement behavior."""
+"""Own edit_file diagnostics and exact, revalidated replacement behavior."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 
-TOOL_NAME = "apply_patch"
+TOOL_NAME = "edit_file"
 MAX_REPORTED_MATCHES = 3
 CONTEXT_LINES = 2
 CLOSEST_MATCH_THRESHOLD = 0.8
@@ -205,7 +205,7 @@ def execute(
                     }
                 ]
                 result["guidance"] = (
-                    "If this is the text you intended, retry apply_patch with "
+                    "If this is the text you intended, retry edit_file with "
                     f"match_id {match_id}."
                 )
             # Character offsets are internal revalidation details, not diagnostics.
@@ -239,7 +239,7 @@ def execute(
                 candidates.append(candidate)
             result["candidates"] = candidates
             result["guidance"] = (
-                "Choose the intended candidate by retrying apply_patch with its match_id."
+                "Choose the intended candidate by retrying edit_file with its match_id."
             )
         for match in matches:
             match.pop("_start", None)

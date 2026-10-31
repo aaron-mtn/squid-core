@@ -164,7 +164,7 @@ Read hello_squid.py and tell me what this thing is doing.
 ```
 
 The agent has access to Squid Core's four built-in tools: `read_file`, `write_file`,
-`apply_patch`, and `run_command`.
+`edit_file`, and `run_command`.
 
 ## Bring your own provider
 
@@ -198,7 +198,7 @@ Squid Core comes with four built-in tools:
 | --- | --- |
 | `read_file` | Reads text, code, and supported documents and images. |
 | `write_file` | Creates or replaces files. |
-| `apply_patch` | Makes targeted edits to existing files. |
+| `edit_file` | Makes targeted edits to existing files. |
 | `run_command` | Runs local shell commands. |
 
 These are available through `squid_core.tools.TOOLS`. You can use the built-in

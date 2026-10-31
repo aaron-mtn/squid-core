@@ -110,6 +110,12 @@ def _search_file(path: Path, needle: str, case_sensitive: bool,
             while True:
                 available = min(remaining_bytes - consumed, MAX_FILE_BYTES + 1 - consumed)
                 if available <= 0:
+                    # Exhausting the budget is not truncation if this regular
+                    # file is complete. Recheck size without reading beyond the
+                    # scan budget, and finalize UTF-8 before releasing its hits.
+                    if consumed == os.fstat(stream.fileno()).st_size:
+                        decoder.decode(b"", final=True)
+                        return matches, consumed, reasons
                     reason = "byte_limit" if consumed >= remaining_bytes else "file_size_limit"
                     return [], consumed, {reason}
                 raw = stream.readline(min(MAX_LINE_BYTES + 1, available))

@@ -883,7 +883,7 @@ def test_compaction_does_not_import_code_squid_application_prompts() -> None:
 def test_core_compactor_has_no_code_squid_tool_semantics() -> None:
     source = inspect.getsource(compaction_module.compactor)
 
-    assert "apply_patch" not in source
+    assert "edit_file" not in source
     assert "write_file" not in source
     assert "run_command" not in source
 

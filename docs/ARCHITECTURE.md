@@ -195,7 +195,7 @@ existing Skill override behavior.
 The environment block retains OS, preferred shell, path separator, and workspace
 facts. Generic command-environment and platform-specific shell execution
 guidance appear only with `run_command`; capability
-notes for `read_file`, `apply_patch`, and `write_file` appear only with those
+notes for `read_file`, `edit_file`, and `write_file` appear only with those
 tools. Core states available capabilities; the application chooses preferences.
 
 Text/spreadsheet omission markers and request-only trimmed source/content
@@ -311,3 +311,27 @@ text-search scope. Truncation reasons are sorted comma-separated codes:
 `line_length_limit`, `match_limit`, `response_size_limit`, `traversal_error`.
 The result contains `ok`, `tool`, `path`, `text`, `matches`, `returned_count`,
 `truncated`, and `truncation_reason`; empty completed searches succeed.
+
+
+### Editing tool name and search EOF boundary
+
+Core exposes exactly seven built-ins: `read_file`, `write_file`, `edit_file`,
+`run_command`, `list_files`, `find_files`, and `search_for_text`. The editing
+implementation lives in `squid_core/tools/builtins/edit_file.py`; its
+`path`/`old_text`/`new_text` and run-local `match_id` forms, matching rules,
+undo lifecycle, workspace checks, and diagnostic trimming are unchanged.
+`apply_patch` is not an executable alias. Applications consume the renamed
+registry and continue to own prompts, hooks, and presentation.
+
+Canonical session messages retain the original tool names and results. Completed
+historical calls replay as conversation data without file migration. A trailing
+interrupted call receives the existing append-only interrupted result on load;
+it is not retried. A new call using the old name fails as an unknown tool.
+Candidate IDs remain run-local and cannot resume across executor lifetimes; the
+model must issue a new `edit_file` request against current text.
+
+At an exhausted text-search scan budget, `_search_file` rechecks the open regular
+file's size without reading beyond the budget. When all bytes were consumed, it
+finalizes UTF-8 and releases validated matches; otherwise it reports `byte_limit`
+and withholds that incomplete file's tentative matches. Other streaming limits
+and binary detection are unchanged.

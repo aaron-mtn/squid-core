@@ -2,7 +2,7 @@
 
 """Owns the tiny tool registry; must not own policy, execution flow, or dynamic plugin machinery."""
 
-from .apply_patch import TOOL_NAME as APPLY_PATCH_NAME, execute as apply_patch, tool_definition as apply_patch_definition
+from .edit_file import TOOL_NAME as EDIT_FILE_NAME, execute as edit_file, tool_definition as edit_file_definition
 from .read_file import TOOL_NAME as READ_FILE_NAME, execute as read_file, tool_definition as read_file_definition
 from .list_files import TOOL_NAME as LIST_FILES_NAME, execute as list_files, tool_definition as list_files_definition
 from .find_files import TOOL_NAME as FIND_FILES_NAME, execute as find_files, tool_definition as find_files_definition
@@ -20,9 +20,9 @@ TOOLS = {
         "execute": write_file,
         "definition": write_file_definition,
     },
-    APPLY_PATCH_NAME: {
-        "execute": apply_patch,
-        "definition": apply_patch_definition,
+    EDIT_FILE_NAME: {
+        "execute": edit_file,
+        "definition": edit_file_definition,
     },
     RUN_COMMAND_NAME: {
         "execute": run_command,

@@ -40,10 +40,10 @@ class FakeUndoStore:
 
 
 def _patch(executor: ToolExecutor, path: Path, old_text: str, new_text: str) -> dict:
-    """Issue a normal apply_patch action through the run-local executor."""
+    """Issue a normal edit_file action through the run-local executor."""
     return executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {
                 "path": str(path),
                 "old_text": old_text,
@@ -56,7 +56,7 @@ def _patch(executor: ToolExecutor, path: Path, old_text: str, new_text: str) -> 
 def _select(executor: ToolExecutor, match_id: str) -> dict:
     """Select one diagnostic candidate without reconstructing the patch."""
     return executor.execute(
-        {"tool": "apply_patch", "args": {"match_id": match_id}}
+        {"tool": "edit_file", "args": {"match_id": match_id}}
     )
 
 
@@ -83,7 +83,7 @@ def test_write_file_snapshots_target_before_write(tmp_path: Path) -> None:
     assert undo_store.contents == ["before"]
 
 
-def test_successful_apply_patch_snapshots_and_records_file_written(tmp_path: Path) -> None:
+def test_successful_edit_file_snapshots_and_records_file_written(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("before", encoding="utf-8")
     undo_store = FakeUndoStore()
@@ -96,7 +96,7 @@ def test_successful_apply_patch_snapshots_and_records_file_written(tmp_path: Pat
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {"path": str(target), "old_text": "before", "new_text": "after"},
         }
     )
@@ -108,7 +108,7 @@ def test_successful_apply_patch_snapshots_and_records_file_written(tmp_path: Pat
     assert undo_store.contents == ["before"]
 
 
-def test_unique_apply_patch_remains_backward_compatible(tmp_path: Path) -> None:
+def test_unique_edit_file_remains_backward_compatible(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("before middle after", encoding="utf-8")
     executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
@@ -158,7 +158,7 @@ def test_candidate_selection_accepts_matching_redundant_path(tmp_path: Path) -> 
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {
                 "match_id": diagnostic["candidates"][0]["match_id"],
                 "path": str(target),
@@ -178,7 +178,7 @@ def test_candidate_selection_ignores_redundant_patch_text(tmp_path: Path) -> Non
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {
                 "match_id": diagnostic["candidates"][0]["match_id"],
                 "path": str(target),
@@ -208,7 +208,7 @@ def test_unusable_candidate_id_with_complete_normal_args_uses_exact_patch(
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {
                 "match_id": match_id,
                 "path": str(target),
@@ -233,12 +233,12 @@ def test_unusable_candidate_id_without_complete_normal_args_is_unavailable(
     executor = ToolExecutor(tmp_path, Session(workspace_root=tmp_path))
 
     result = executor.execute(
-        {"tool": "apply_patch", "args": {"match_id": match_id}}
+        {"tool": "edit_file", "args": {"match_id": match_id}}
     )
 
     assert result == {
         "ok": False,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "error": "patch_candidate_unavailable",
         "match_id": match_id,
     }
@@ -254,7 +254,7 @@ def test_candidate_selection_rejects_conflicting_redundant_path(tmp_path: Path) 
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {
                 "match_id": diagnostic["candidates"][0]["match_id"],
                 "path": str(other),
@@ -474,7 +474,7 @@ def test_failed_write_file_discards_new_undo_state(tmp_path: Path) -> None:
     assert list(undo_store.files_dir.iterdir()) == []
 
 
-def test_successful_apply_patch_produces_usable_undo_state(tmp_path: Path) -> None:
+def test_successful_edit_file_produces_usable_undo_state(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("before", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
@@ -486,7 +486,7 @@ def test_successful_apply_patch_produces_usable_undo_state(tmp_path: Path) -> No
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {"path": str(target), "old_text": "before", "new_text": "after"},
         }
     )
@@ -497,7 +497,7 @@ def test_successful_apply_patch_produces_usable_undo_state(tmp_path: Path) -> No
     assert target.read_text(encoding="utf-8") == "before"
 
 
-def test_failed_apply_patch_discards_new_undo_state(tmp_path: Path) -> None:
+def test_failed_edit_file_discards_new_undo_state(tmp_path: Path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("before", encoding="utf-8")
     undo_store = UndoStore.create(tmp_path / ".undo", workspace_root=tmp_path)
@@ -509,7 +509,7 @@ def test_failed_apply_patch_discards_new_undo_state(tmp_path: Path) -> None:
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {"path": str(target), "old_text": "missing", "new_text": "after"},
         }
     )
@@ -540,7 +540,7 @@ def test_failed_mutation_preserves_previous_successful_undo_state(tmp_path: Path
     )
     failed_result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {"path": str(unchanged), "old_text": "missing", "new_text": "replacement"},
         }
     )
@@ -685,7 +685,7 @@ def test_blocked_write_file_does_not_snapshot_or_call_tool(
     assert calls == []
 
 
-def test_apply_patch_respects_workspace_policy(monkeypatch, tmp_path: Path) -> None:
+def test_edit_file_respects_workspace_policy(monkeypatch, tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     outside = tmp_path / "outside.txt"
     workspace.mkdir()
@@ -694,12 +694,12 @@ def test_apply_patch_respects_workspace_policy(monkeypatch, tmp_path: Path) -> N
 
     def fake_execute(workspace_root: Path, **args) -> dict:
         calls.append((workspace_root, args))
-        return {"ok": True, "tool": "apply_patch", "path": args["path"]}
+        return {"ok": True, "tool": "edit_file", "path": args["path"]}
 
     monkeypatch.setattr(
         tool_executor_module,
         "TOOLS",
-        {"apply_patch": {"execute": fake_execute}},
+        {"edit_file": {"execute": fake_execute}},
     )
     executor = ToolExecutor(
         workspace_root=workspace,
@@ -709,7 +709,7 @@ def test_apply_patch_respects_workspace_policy(monkeypatch, tmp_path: Path) -> N
 
     result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {"path": str(outside), "old_text": "old", "new_text": "new"},
         }
     )
@@ -804,7 +804,7 @@ def test_allow_outside_workspace_allows_outside_file_paths_through(
         {
             "read_file": {"execute": fake_execute},
             "write_file": {"execute": fake_execute},
-            "apply_patch": {"execute": fake_execute},
+            "edit_file": {"execute": fake_execute},
         },
     )
     executor = ToolExecutor(
@@ -827,7 +827,7 @@ def test_allow_outside_workspace_allows_outside_file_paths_through(
     )
     patch_result = executor.execute(
         {
-            "tool": "apply_patch",
+            "tool": "edit_file",
             "args": {"path": str(outside_write), "old_text": "old", "new_text": "new"},
         }
     )
@@ -875,3 +875,10 @@ def test_workspace_boundary_approval_allows_outside_file_path_through(
 
     assert result["ok"] is True
     assert calls == [(workspace, {"path": str(outside)})]
+
+
+def test_old_edit_name_is_not_executable(tmp_path: Path) -> None:
+    executor = ToolExecutor(tmp_path, Session(tmp_path))
+    result = executor.execute({"tool": "apply_patch", "args": {}})
+    assert not result["ok"]
+    assert result["error"] == "Unknown tool: apply_patch"

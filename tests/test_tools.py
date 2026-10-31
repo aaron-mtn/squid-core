@@ -10,7 +10,7 @@ from squid_core.tools.builtins.read_file import tool_definition as read_file_def
 from squid_core.tools.builtins._truncation import truncate_head_tail
 from squid_core.tools.builtins import TOOLS
 from squid_core.tools.builtins.run_command import execute as run_command
-from squid_core.tools.builtins.apply_patch import execute as apply_patch
+from squid_core.tools.builtins.edit_file import execute as edit_file
 from squid_core.tools.builtins.write_file import execute as write_file
 from squid_core.settings import ReadFileSettings
 
@@ -712,15 +712,15 @@ def test_write_file_rejects_relative_path_succeeds_with_absolute_path_and_is_com
     assert file_path.read_text(encoding="utf-8") == "written"
 
 
-def test_apply_patch_replaces_one_exact_occurrence_and_is_compact(tmp_path: Path) -> None:
+def test_edit_file_replaces_one_exact_occurrence_and_is_compact(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     file_path.write_text("before middle after", encoding="utf-8")
 
-    result = apply_patch(tmp_path, str(file_path), "middle", "center")
+    result = edit_file(tmp_path, str(file_path), "middle", "center")
 
     assert result == {
         "ok": True,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "path": str(file_path),
         "replacements": 1,
         "start_line": 1,
@@ -735,13 +735,13 @@ def test_apply_patch_replaces_one_exact_occurrence_and_is_compact(tmp_path: Path
     assert "content" not in result
 
 
-def test_apply_patch_bounds_long_replacement_previews(tmp_path: Path) -> None:
+def test_edit_file_bounds_long_replacement_previews(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     old_text = "a" * 200 + "b" * 200
     new_text = "c" * 200 + "d" * 200
     file_path.write_text(old_text, encoding="utf-8")
 
-    result = apply_patch(tmp_path, str(file_path), old_text, new_text)
+    result = edit_file(tmp_path, str(file_path), old_text, new_text)
 
     assert len(result["before_preview"]) == 300
     assert len(result["after_preview"]) == 300
@@ -753,15 +753,15 @@ def test_apply_patch_bounds_long_replacement_previews(tmp_path: Path) -> None:
     assert result["after_preview"].endswith("d")
 
 
-def test_apply_patch_fails_when_old_text_missing_and_does_not_modify_file(tmp_path: Path) -> None:
+def test_edit_file_fails_when_old_text_missing_and_does_not_modify_file(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     file_path.write_text("original", encoding="utf-8")
 
-    result = apply_patch(tmp_path, str(file_path), "missing", "replacement")
+    result = edit_file(tmp_path, str(file_path), "missing", "replacement")
 
     assert result == {
         "ok": False,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "path": str(file_path),
         "error": "old_text_not_found",
         "occurrences": 0,
@@ -769,14 +769,14 @@ def test_apply_patch_fails_when_old_text_missing_and_does_not_modify_file(tmp_pa
     assert file_path.read_text(encoding="utf-8") == "original"
 
 
-def test_apply_patch_fails_when_old_text_is_not_unique_and_does_not_modify_file(tmp_path: Path) -> None:
+def test_edit_file_fails_when_old_text_is_not_unique_and_does_not_modify_file(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     file_path.write_text("same different same", encoding="utf-8")
 
-    result = apply_patch(tmp_path, str(file_path), "same", "changed")
+    result = edit_file(tmp_path, str(file_path), "same", "changed")
 
     assert result["ok"] is False
-    assert result["tool"] == "apply_patch"
+    assert result["tool"] == "edit_file"
     assert result["path"] == str(file_path)
     assert result["error"] == "old_text_not_unique"
     assert result["occurrences"] == 2
@@ -784,12 +784,12 @@ def test_apply_patch_fails_when_old_text_is_not_unique_and_does_not_modify_file(
     assert file_path.read_text(encoding="utf-8") == "same different same"
 
 
-def test_apply_patch_missing_text_returns_closest_same_sized_window(tmp_path: Path) -> None:
+def test_edit_file_missing_text_returns_closest_same_sized_window(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     original = "header\nalpha = 1\nbeta = 20\ngamma = 3\nfooter\n"
     file_path.write_text(original, encoding="utf-8")
 
-    result = apply_patch(
+    result = edit_file(
         tmp_path,
         str(file_path),
         "alpha = 1\nbeta = 2\ngamma = 3",
@@ -806,19 +806,19 @@ def test_apply_patch_missing_text_returns_closest_same_sized_window(tmp_path: Pa
     assert file_path.read_text(encoding="utf-8") == original
 
 
-def test_apply_patch_missing_text_omits_low_confidence_context(tmp_path: Path) -> None:
+def test_edit_file_missing_text_omits_low_confidence_context(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     original = "one\ntwo\nthree\n"
     file_path.write_text(original, encoding="utf-8")
 
-    result = apply_patch(tmp_path, str(file_path), "completely\nunrelated", "replacement")
+    result = edit_file(tmp_path, str(file_path), "completely\nunrelated", "replacement")
 
     assert result["error"] == "old_text_not_found"
     assert "closest_match" not in result
     assert file_path.read_text(encoding="utf-8") == original
 
 
-def test_apply_patch_duplicate_diagnostics_have_exact_bounded_ranges(tmp_path: Path) -> None:
+def test_edit_file_duplicate_diagnostics_have_exact_bounded_ranges(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     original = "\n".join(
         [
@@ -840,7 +840,7 @@ def test_apply_patch_duplicate_diagnostics_have_exact_bounded_ranges(tmp_path: P
     )
     file_path.write_text(original, encoding="utf-8")
 
-    result = apply_patch(tmp_path, str(file_path), "target\nvalue", "changed")
+    result = edit_file(tmp_path, str(file_path), "target\nvalue", "changed")
 
     assert result["error"] == "old_text_not_unique"
     assert result["occurrences"] == 4
@@ -862,11 +862,11 @@ def test_apply_patch_duplicate_diagnostics_have_exact_bounded_ranges(tmp_path: P
     assert file_path.read_text(encoding="utf-8") == original
 
 
-def test_apply_patch_success_reports_affected_multiline_ranges(tmp_path: Path) -> None:
+def test_edit_file_success_reports_affected_multiline_ranges(tmp_path: Path) -> None:
     file_path = tmp_path / "input.txt"
     file_path.write_text("before\nold one\nold two\nafter\n", encoding="utf-8")
 
-    result = apply_patch(
+    result = edit_file(
         tmp_path,
         str(file_path),
         "old one\nold two",
@@ -889,19 +889,19 @@ def test_builtin_tool_descriptions_contain_only_mechanical_guidance() -> None:
     assert all("before calling" not in description.lower() for description in descriptions)
 
 
-def test_apply_patch_requires_absolute_path(tmp_path: Path) -> None:
-    result = apply_patch(tmp_path, "input.txt", "old", "new")
+def test_edit_file_requires_absolute_path(tmp_path: Path) -> None:
+    result = edit_file(tmp_path, "input.txt", "old", "new")
 
     assert result == {
         "ok": False,
-        "tool": "apply_patch",
+        "tool": "edit_file",
         "path": "input.txt",
         "error": "path_not_absolute",
     }
 
 
-def test_apply_patch_schema_distinguishes_normal_and_candidate_calls() -> None:
-    parameters = TOOLS["apply_patch"]["definition"]()["function"]["parameters"]
+def test_edit_file_schema_distinguishes_normal_and_candidate_calls() -> None:
+    parameters = TOOLS["edit_file"]["definition"]()["function"]["parameters"]
 
     assert parameters["properties"] == {
         "path": {
@@ -934,11 +934,11 @@ def test_apply_patch_schema_distinguishes_normal_and_candidate_calls() -> None:
         {"path": "x", "old_text": "old"},
     ],
 )
-def test_apply_patch_rejects_malformed_request_forms(
+def test_edit_file_rejects_malformed_request_forms(
     tmp_path: Path,
     kwargs: dict,
 ) -> None:
-    result = apply_patch(tmp_path, **kwargs)
+    result = edit_file(tmp_path, **kwargs)
 
     assert result["ok"] is False
     assert result["error"] == "invalid_arguments"
@@ -1377,3 +1377,12 @@ def test_run_command_uses_supplied_context_without_redetecting(monkeypatch, tmp_
     assert calls[0][1]["shell"] is True
     assert calls[0][1]["start_new_session"] is True
     assert result["ok"] is True
+
+
+def test_builtin_registry_exposes_only_current_seven_names() -> None:
+    assert list(TOOLS) == [
+        "read_file", "write_file", "edit_file", "run_command",
+        "list_files", "find_files", "search_for_text",
+    ]
+    assert [entry["definition"]()["function"]["name"] for entry in TOOLS.values()] == list(TOOLS)
+    assert "apply_patch" not in TOOLS

@@ -17,7 +17,7 @@ def test_parse_valid_skill_file(tmp_path: Path) -> None:
         """---
 name: bug-fix
 description: Fix bugs with small targeted edits.
-allowed-tools: read_file apply_patch run_command
+allowed-tools: read_file edit_file run_command
 ---
 
 Focus on the requested bug.
@@ -28,7 +28,7 @@ Focus on the requested bug.
 
     assert skill.name == "bug-fix"
     assert skill.description == "Fix bugs with small targeted edits."
-    assert skill.allowed_tools == ("read_file", "apply_patch", "run_command")
+    assert skill.allowed_tools == ("read_file", "edit_file", "run_command")
     assert skill.allowed_tools_explicit is True
     assert skill.instructions == "Focus on the requested bug."
     assert skill.path == path
