@@ -4,6 +4,7 @@
 
 from .apply_patch import TOOL_NAME as APPLY_PATCH_NAME, execute as apply_patch, tool_definition as apply_patch_definition
 from .read_file import TOOL_NAME as READ_FILE_NAME, execute as read_file, tool_definition as read_file_definition
+from .list_files import TOOL_NAME as LIST_FILES_NAME, execute as list_files, tool_definition as list_files_definition
 from .run_command import TOOL_NAME as RUN_COMMAND_NAME, execute as run_command, tool_definition as run_command_definition
 from .write_file import TOOL_NAME as WRITE_FILE_NAME, execute as write_file, tool_definition as write_file_definition
 
@@ -24,5 +25,9 @@ TOOLS = {
     RUN_COMMAND_NAME: {
         "execute": run_command,
         "definition": run_command_definition,
+    },
+    LIST_FILES_NAME: {
+        "execute": list_files,
+        "definition": list_files_definition,
     },
 }

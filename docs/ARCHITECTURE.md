@@ -219,3 +219,24 @@ are normalized inside providers before reaching Core. Diagnostic `raw_tool_calls
 are flat id/name/arguments records, while model-visible message tool calls retain
 the nested function shape. The transcript renderer supports both current sources.
 No migration, reasoning fallback, or compatibility alias is provided.
+
+
+## Immediate workspace directory inspection
+
+The built-in `list_files` tool lists one directory through Python filesystem
+APIs and defaults an omitted path to the active workspace. Explicit paths must
+be absolute. The tool reuses `is_inside_workspace` on resolved paths and rejects
+outside targets itself, regardless of executor approval settings. External
+symlinks, junctions, and linked ancestors cannot be enumerated. Child links and
+reparse points are returned as `link` entries without inspecting their targets.
+Entries contain name, absolute path, and type (`directory`, `file`, `link`, or
+`other`), sorted directories first, then casefolded name and exact name.
+
+The bounded sorted prefix retains at most 501 candidates while scanning and
+returns at most 500 entries and 32,000 UTF-8 JSON bytes including metadata.
+`truncated` and `truncation_reason` identify an entry or response-size limit.
+Empty directories succeed; invalid paths, missing directories, non-directory
+paths, and filesystem/access failures return normalized errors without partial
+contents. This is nonrecursive inspection, not a filesystem sandbox or a change
+to existing file tools' approval policy. Applications still own tool preferences
+and Skill permissions; Core's environment prompt names only active capabilities.

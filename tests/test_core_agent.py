@@ -149,7 +149,7 @@ def test_programmatic_skill_nonempty_tools_are_permissions() -> None:
     PlatformContext("Linux", "bash", "/bin/bash", "/", False),
 ])
 @pytest.mark.parametrize("names", [(), ("custom",), ("read_file",), ("apply_patch",),
-                                  ("write_file",), ("run_command",), tuple(TOOLS)])
+                                  ("write_file",), ("run_command",), ("list_files",), tuple(TOOLS)])
 def test_environment_guidance_matches_resolved_tools(context, names) -> None:
     tools = {name: TOOLS.get(name, {}) for name in names}
     prompt = Agent("task", tools=tools, platform_context=context,

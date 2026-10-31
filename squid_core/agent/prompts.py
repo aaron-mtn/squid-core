@@ -146,6 +146,7 @@ def execution_environment_prompt(
     # File preferences belong to the host; Core states only available capabilities.
     for name, purpose in (
         ("read_file", "reading files"),
+        ("list_files", "listing immediate workspace files and folders"),
         ("apply_patch", "focused file edits"),
         ("write_file", "writing files"),
     ):
