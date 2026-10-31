@@ -270,3 +270,44 @@ and `truncation_reason`. Multiple reasons are comma-separated in sorted order:
 of exhaustion. An inaccessible root fails with a fixed error; descendant and
 mid-iterator failures mark partial results without leaking exception text.
 Existing `list_files`, `read_file`, approvals, and the agent loop are unchanged.
+
+
+## Bounded literal text search
+
+The built-in `search_for_text` accepts required single-line literal `text`
+(1-1024 characters), optional absolute directory `path` (workspace by default),
+optional case-sensitive filename `file_pattern` (`*`/`?`, up to 256 characters),
+and boolean `case_sensitive` (true by default). Matching searches UTF-8 source,
+Markdown, JSON, YAML, and other ordinary text without extension restrictions.
+UTF-8 BOM is accepted at file start; LF and CRLF produce one-based line numbers.
+Insensitive matching uses Unicode case folding consistently across platforms.
+There is no regex, multiline matching, batching, indexing, or cache.
+
+This module reuses `find_files`' internal link/ancestor checks and excluded
+names, without changing the existing tools. Its iterative sorted traversal
+rechecks descendant containment and links, skips reparse points/junctions and
+special files, and enforces the workspace boundary independently of approvals.
+Descendant failures mark partial results; inaccessible roots return fixed
+errors without raw OS exception strings. Generated directories are skipped
+as in filename search, without interpreting `.gitignore`.
+
+Limits are 20,000 visited entries (plus iterator lookahead to detect truncation),
+1,000 directories, 16 MiB of scanned bytes, 1 MiB per file, 16 KiB per line,
+500 matching lines, 512-character excerpts, and 32,000 UTF-8 JSON response bytes.
+Each matching line produces one path/line_number/text entry; results sort by
+absolute path and line number. Excerpts are positioned near the first hit.
+Limits bound zero-match searches as well as successful searches. File reads use
+bounded streaming `readline` segments and incremental UTF-8 validation; overlong
+lines are drained in bounded segments and skipped while preserving later line
+numbers. NUL/unsupported C0 controls and decoding failures classify a file as
+non-text and discard its tentative matches. Text file matches are held until
+validation reaches EOF; a byte-budget/read failure discards that incomplete
+file's tentative matches while preserving already validated files.
+
+Oversized files and overlong lines mark incomplete results, while binary,
+undecodable, linked, excluded, and special files are intentionally outside the
+text-search scope. Truncation reasons are sorted comma-separated codes:
+`entry_limit`, `directory_limit`, `byte_limit`, `file_size_limit`,
+`line_length_limit`, `match_limit`, `response_size_limit`, `traversal_error`.
+The result contains `ok`, `tool`, `path`, `text`, `matches`, `returned_count`,
+`truncated`, and `truncation_reason`; empty completed searches succeed.
