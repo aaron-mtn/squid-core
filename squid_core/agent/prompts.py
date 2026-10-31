@@ -147,6 +147,7 @@ def execution_environment_prompt(
     for name, purpose in (
         ("read_file", "reading files"),
         ("list_files", "listing immediate workspace files and folders"),
+        ("find_files", "finding workspace files recursively by filename"),
         ("apply_patch", "focused file edits"),
         ("write_file", "writing files"),
     ):

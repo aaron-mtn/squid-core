@@ -884,7 +884,7 @@ def test_apply_patch_success_reports_affected_multiline_ranges(tmp_path: Path) -
 def test_builtin_tool_descriptions_contain_only_mechanical_guidance() -> None:
     descriptions = [entry["definition"]()["function"]["description"] for entry in TOOLS.values()]
 
-    assert len(descriptions) == 5
+    assert len(descriptions) == 6
     assert all("action note" not in description.lower() for description in descriptions)
     assert all("before calling" not in description.lower() for description in descriptions)
 

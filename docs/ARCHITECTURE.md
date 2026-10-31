@@ -240,3 +240,33 @@ paths, and filesystem/access failures return normalized errors without partial
 contents. This is nonrecursive inspection, not a filesystem sandbox or a change
 to existing file tools' approval policy. Applications still own tool preferences
 and Skill permissions; Core's environment prompt names only active capabilities.
+
+
+## Bounded recursive filename search
+
+Core's built-in `find_files` accepts one required `pattern` and an optional
+absolute directory `path` defaulting to the canonical workspace root. It matches
+filenames (not full paths or contents) with case-sensitive `fnmatchcase` on every
+platform. Only `*` and `?` wildcards are supported; empty/overlong patterns,
+path separators, NULs, brackets, and dot/dot-dot names are rejected. The pattern
+limit is 256 characters. It introduces no dependencies, indexing, or caching.
+
+The tool uses iterative traversal with sorted children and sorted absolute
+result paths. It skips symbolic links and Windows reparse points, including
+junctions; linked search roots and linked ancestors are rejected. Resolved
+workspace containment and link checks run for descendants and again before
+scanning queued directories, independently of executor approval settings.
+`.git`, `node_modules`, `.venv`, `venv`, `__pycache__`, `dist`, and `build`
+directories are pruned by exact name; `.gitignore` is not interpreted.
+
+Search processes at most 20,000 entries (one iterator lookahead can detect an
+incomplete directory), visits at most 1,000 directories, retains at most 500
+matching files, and limits the whole UTF-8 JSON response to 32,000 bytes.
+Entry and directory budgets apply even to searches with zero matches. Results
+include `ok`, `tool`, `path`, `pattern`, `files`, `returned_count`, `truncated`,
+and `truncation_reason`. Multiple reasons are comma-separated in sorted order:
+`entry_limit`, `directory_limit`, `result_limit`, `response_size_limit`, and
+`traversal_error`. A partial scan retains collected results, but makes no claim
+of exhaustion. An inaccessible root fails with a fixed error; descendant and
+mid-iterator failures mark partial results without leaking exception text.
+Existing `list_files`, `read_file`, approvals, and the agent loop are unchanged.
