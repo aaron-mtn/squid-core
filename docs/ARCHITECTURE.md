@@ -187,9 +187,12 @@ correction. It assembles host identity, baseline policy, Skill instructions,
 overrideable guidance, and environment facts without importing the host.
 Narration style, source-reading and editing preferences, final report style,
 and coding examples belong to `code_squid/agent/prompts.py` in Code Squid.
-Code Squid keeps narration, coding examples, and moved source/shell-discovery
-preferences in its non-replaceable baseline policy alongside its coding discipline; tool and final-report guidance keep
-existing Skill override behavior.
+Code Squid names its baseline components through `PromptDefaults.baseline_sections`.
+The optional `DISABLE_PROMPT_SECTIONS` Skill directive omits host-supported text;
+application names remain outside Core. `supported_disable_sections` travels through
+Skill and Mod discovery/validation/resolution. Assembly revalidates against actual
+defaults, protecting Core sections and tool enforcement. Legacy baseline text and
+append/replace slots keep their prior behavior. See `docs/SKILLS.md` for the contract.
 
 `Agent.initial_messages` passes its resolved active registry to prompt assembly.
 The environment block retains OS, preferred shell, path separator, and workspace

@@ -100,7 +100,7 @@ and inserted into its respective extension slot instead.
 ```text
 System prompt
 |-- agent identity                   <- Skill may append/replace
-|-- host baseline policy             <- not Skill-overridable
+|-- host baseline policy             <- named host components may be omitted
 |-- execution environment            <- Core-generated
 |-- Active Skill                     <- description + ordinary instructions
 |-- tool usage guidance              <- Skill may append/replace
@@ -144,9 +144,9 @@ The final prompt's outer stripping and omission of blank sections still apply.
 
 Everything before the first recognized override heading is ordinary Skill
 instructions. Everything after an override heading belongs to that override
-until the next recognized override heading or the end of the file. An ordinary
+until the next recognized override heading, disable directive, or the end of the file. An ordinary
 Markdown heading does not close an override. Place ordinary instructions before
-overrides; there is no closing marker that switches back to ordinary instructions.
+overrides. A disable directive closes the current override.
 If a section is declared multiple times, the last declaration wins.
 
 The parser recognizes a candidate only when the line starts with `## ` and has
@@ -167,6 +167,44 @@ boundary, not a guarantee that a model will obey every instruction.
 These mechanics belong to reusable Core. Code Squid is one example of a host
 that can supply richer prompt defaults through the same mechanism; using Skills
 does not require Code Squid.
+
+## Optional section disabling
+
+A Skill may include an exact, unindented `## DISABLE_PROMPT_SECTIONS` heading,
+followed by zero or more unindented `- SECTION_NAME` lines. Blank lines are allowed;
+the next Markdown heading or end of file closes the list. Put ordinary instructions
+before this directive and override headings after it. The directive/list are removed
+from ordinary instructions; fenced examples and other headings are not directives.
+
+```markdown
+## DISABLE_PROMPT_SECTIONS
+
+- TOOL_USAGE_GUIDANCE
+```
+
+`Skill.disabled_prompt_sections` stores the ordered tuple (default `()`).
+Unknown, duplicate, protected, malformed, or override-conflicting declarations
+raise `ValueError`; duplicate directives are also rejected. Existing append/replace
+semantics and the three override targets do not change; there is no disable mode.
+
+Hosts may supply `PromptDefaults.baseline_sections`, an insertion-ordered mapping
+of application names to their original baseline component strings. When supplied,
+it renders instead of `baseline_policy` at the same location with two-newline
+separators. The legacy baseline field remains the fallback when the map is empty.
+Core does not infer names by inspecting Markdown or import application policy.
+
+`parse_skill_file`, `discover_skills`, and Mod `discover_mods`, `load_mod`,
+`validate_mod`, and `resolve_mod` accept optional `supported_disable_sections`.
+Without it only the three fixed override targets can be disabled. Hosts pass their
+explicit target set consistently through discovery, authoring, and resolution.
+Prompt assembly revalidates even programmatic Skills against the actual defaults'
+named baseline components plus the three fixed targets. Core-owned environment,
+protocol, verification, examples, and corrections cannot be disabled. Hosts must
+not use those protected names for their own components.
+
+Omission affects only text. It never changes tool registries, approvals, reply
+validation, retry limits, hooks, or executor enforcement. Existing Skills without
+the directive retain the same assembled prompt.
 
 ## Tool permissions and run construction
 

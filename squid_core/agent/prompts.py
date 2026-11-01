@@ -1,9 +1,9 @@
 """Protected agent protocol and prompt assembly."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from squid_core.platform_context import PlatformContext
-from squid_core.skills import Skill
+from squid_core.skills import Skill, SUPPORTED_PROMPT_SECTIONS, validate_disabled_prompt_sections
 from squid_core.tools.builtins import TOOLS
 
 
@@ -16,6 +16,9 @@ class PromptDefaults:
     baseline_policy: str = ""
     tool_usage_guidance: str = ""
     final_summary_requirements: str = ""
+    # Optional names for the existing baseline text, supplied only by the host.
+    # baseline_policy remains the compatibility fallback, byte-for-byte unchanged.
+    baseline_sections: dict[str, str] = field(default_factory=dict)
 
 
 PROTECTED_RESPONSE_PROTOCOL = """
@@ -63,6 +66,9 @@ def prompt_section(
 
     if skill is None:
         return default
+
+    if section_name in skill.disabled_prompt_sections:
+        return ""
 
     override = skill.prompt_sections.get(section_name)
     if override is None:
@@ -167,6 +173,20 @@ def system_prompt(
 ) -> str:
     """Assemble host policy around the protected, task-neutral runtime protocol."""
     defaults = defaults or PromptDefaults()
+    if skill is not None:
+        validate_disabled_prompt_sections(
+            skill.disabled_prompt_sections, skill.prompt_sections, skill.path,
+            SUPPORTED_PROMPT_SECTIONS | defaults.baseline_sections.keys(),
+        )
+
+    # Named components replace only the baseline's representation, not its
+    # position or separators. Existing hosts need not supply component names.
+    baseline = defaults.baseline_policy
+    if defaults.baseline_sections:
+        disabled = skill.disabled_prompt_sections if skill else ()
+        baseline = "\n\n".join(
+            text for name, text in defaults.baseline_sections.items() if name not in disabled
+        )
 
     identity = prompt_section(
         "AGENT_IDENTITY",
@@ -188,7 +208,7 @@ def system_prompt(
 
     sections = [
         identity,
-        defaults.baseline_policy,
+        baseline,
         environment,
         skill_prompt_block(skill),
         tool_usage_guidance(defaults.tool_usage_guidance, skill),

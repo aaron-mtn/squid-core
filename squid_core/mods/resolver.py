@@ -37,6 +37,7 @@ from .model import (
 
 def discover_mods(
     app_home: Path | str, *, built_in_tools: dict | None = None,
+    supported_disable_sections: frozenset[str] | None = None,
 ) -> dict[str, Mod]:
     """Discover Mods and validate against the supplied registry or Core defaults."""
     root = Path(app_home) / "mods"
@@ -48,7 +49,10 @@ def discover_mods(
         (path for path in root.iterdir() if path.is_dir()),
         key=lambda path: (path.name.lower(), path.name),
     ):
-        mod = _load_mod_dir(mod_dir, app_home=Path(app_home), built_in_tools=built_in_tools)
+        mod = _load_mod_dir(
+            mod_dir, app_home=Path(app_home), built_in_tools=built_in_tools,
+            supported_disable_sections=supported_disable_sections,
+        )
         if mod is not None:
             mods[mod_dir.name] = mod
     return mods
@@ -56,6 +60,7 @@ def discover_mods(
 
 def load_mod(
     name: str, app_home: Path | str, *, built_in_tools: dict | None = None,
+    supported_disable_sections: frozenset[str] | None = None,
 ) -> Mod:
     """Load a named Mod and validate against the supplied registry or Core defaults."""
     if not isinstance(name, str) or not SAFE_MOD_NAME_RE.fullmatch(name):
@@ -64,7 +69,10 @@ def load_mod(
     mod_dir = (root / name).resolve()
     if mod_dir == root or root not in mod_dir.parents:
         raise ModResolutionError(f"Invalid Mod path: {name!r}")
-    mod = _load_mod_dir(mod_dir, app_home=Path(app_home), built_in_tools=built_in_tools)
+    mod = _load_mod_dir(
+        mod_dir, app_home=Path(app_home), built_in_tools=built_in_tools,
+        supported_disable_sections=supported_disable_sections,
+    )
     if mod is None:
         raise ModResolutionError(f"Unknown Mod: {name}")
     return mod
@@ -75,6 +83,7 @@ def validate_mod(
     app_home: Path | str,
     *,
     built_in_tools: dict | None = None,
+    supported_disable_sections: frozenset[str] | None = None,
 ) -> tuple[str, ...]:
     """Validate a Mod and referenced metadata without importing source code."""
     # A manifest parse failure produces placeholder metadata. Preserve its
@@ -85,7 +94,7 @@ def validate_mod(
     if errors:
         return tuple(errors)
 
-    skills, skill_errors = _discover_packaged_skills(mod)
+    skills, skill_errors = _discover_packaged_skills(mod, supported_disable_sections=supported_disable_sections)
     errors.extend(skill_errors)
     protected_tools = TOOLS if built_in_tools is None else built_in_tools
     # Validate every profile's dependencies, including inactive Skills. Never
@@ -110,12 +119,13 @@ def resolve_mod(
     workspace_root: Path | str | None = None,
     session_id: str | None = None,
     built_in_tools: dict | None = None,
+    supported_disable_sections: frozenset[str] | None = None,
 ) -> ResolvedMod:
     """Resolve one packaged Skill (default when omitted) and Mod-wide Hooks."""
     app_home = Path(app_home)
     protected_tools = TOOLS if built_in_tools is None else built_in_tools
-    mod = load_mod(name, app_home, built_in_tools=protected_tools)
-    errors = validate_mod(mod, app_home, built_in_tools=protected_tools)
+    mod = load_mod(name, app_home, built_in_tools=protected_tools, supported_disable_sections=supported_disable_sections)
+    errors = validate_mod(mod, app_home, built_in_tools=protected_tools, supported_disable_sections=supported_disable_sections)
     if errors:
         raise ModResolutionError(
             f"Mod {name} is invalid:\n" + "\n".join(f"- {error}" for error in errors)
@@ -141,6 +151,7 @@ def resolve_mod(
 
 def _load_mod_dir(
     mod_dir: Path, *, app_home: Path, built_in_tools: dict | None = None,
+    supported_disable_sections: frozenset[str] | None = None,
 ) -> Mod | None:
     metadata_path = mod_dir / "mod.yaml"
     if not metadata_path.is_file():
@@ -155,11 +166,11 @@ def _load_mod_dir(
             hooks=_string_list(metadata, "hooks", metadata_path),
             path=mod_dir,
         )
-        skills, _ = _discover_packaged_skills(mod)
+        skills, _ = _discover_packaged_skills(mod, supported_disable_sections=supported_disable_sections)
         mod = replace(mod, skills=skills)
         # Discovery and execution must validate against the same host registry;
         # Core tools are only the default when the caller omits its registry.
-        errors = validate_mod(mod, app_home, built_in_tools=built_in_tools)
+        errors = validate_mod(mod, app_home, built_in_tools=built_in_tools, supported_disable_sections=supported_disable_sections)
         return replace(mod, valid=not errors, errors=errors)
     except (ModMetadataError, OSError) as error:
         return Mod(
@@ -197,7 +208,9 @@ def _validate_manifest(mod: Mod) -> tuple[str, ...]:
     return tuple(errors)
 
 
-def _discover_packaged_skills(mod: Mod) -> tuple[dict[str, Skill], list[str]]:
+def _discover_packaged_skills(
+    mod: Mod, *, supported_disable_sections: frozenset[str] | None = None,
+) -> tuple[dict[str, Skill], list[str]]:
     """Read direct packaged children without consulting standalone Skills."""
     skills: dict[str, Skill] = {}
     errors: list[str] = []
@@ -207,7 +220,10 @@ def _discover_packaged_skills(mod: Mod) -> tuple[dict[str, Skill], list[str]]:
     for path in paths:
         skill_id = path.parent.name
         try:
-            skill = parse_skill_file(path, source="mod", editable=False)
+            skill = parse_skill_file(
+                path, source="mod", editable=False,
+                supported_disable_sections=supported_disable_sections,
+            )
         except (OSError, ValueError) as error:
             errors.append(str(error))
             continue

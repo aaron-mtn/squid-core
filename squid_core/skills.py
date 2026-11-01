@@ -18,6 +18,13 @@ UNSUPPORTED_PROMPT_SECTIONS = {
     "COMPACTION_PROMPT",
 }
 
+# These names describe Core-owned text, never application extension slots.
+PROTECTED_PROMPT_SECTIONS = UNSUPPORTED_PROMPT_SECTIONS | {
+    "EXECUTION_ENVIRONMENT", "RESPONSE_PROTOCOL", "VERIFICATION_GUIDANCE",
+    "RESPONSE_EXAMPLES", "PROTECTED_RESPONSE_PROTOCOL",
+    "PROTECTED_VERIFICATION_GUIDANCE", "PROTECTED_RESPONSE_EXAMPLES", "ACTIVE_SKILL",
+}
+
 
 @dataclass(frozen=True)
 class PromptSectionOverride:
@@ -39,6 +46,7 @@ class Skill:
     source: str = "user"
     editable: bool = True
     prompt_sections: dict[str, PromptSectionOverride] = field(default_factory=dict)
+    disabled_prompt_sections: tuple[str, ...] = ()
 
 
 def select_skill_tools(skill: Skill | None, available_tools: dict) -> dict:
@@ -57,7 +65,10 @@ def select_skill_tools(skill: Skill | None, available_tools: dict) -> dict:
     return {name: available_tools[name] for name in skill.allowed_tools}
 
 
-def parse_skill_file(path: Path, *, source: str = "user", editable: bool = True) -> Skill:
+def parse_skill_file(
+    path: Path, *, source: str = "user", editable: bool = True,
+    supported_disable_sections: frozenset[str] | None = None,
+) -> Skill:
     text = path.read_text(encoding="utf-8")
     frontmatter, instructions = _split_frontmatter(text, path)
     data = _parse_simple_frontmatter(frontmatter, path)
@@ -72,7 +83,9 @@ def parse_skill_file(path: Path, *, source: str = "user", editable: bool = True)
     allowed_tools_explicit = "allowed-tools" in data
     allowed_tools = _parse_allowed_tools(data.get("allowed-tools", ""), path)
 
+    instructions, disabled = _extract_disabled_prompt_sections(instructions, path)
     instructions, prompt_sections = _parse_prompt_section_overrides(instructions, path)
+    validate_disabled_prompt_sections(disabled, prompt_sections, path, supported_disable_sections)
 
     return Skill(
         name=name,
@@ -84,12 +97,14 @@ def parse_skill_file(path: Path, *, source: str = "user", editable: bool = True)
         source=source,
         editable=editable,
         prompt_sections=prompt_sections,
+        disabled_prompt_sections=disabled,
     )
 
 
 def discover_skills(
     *,
     app_home: Path | str,
+    supported_disable_sections: frozenset[str] | None = None,
 ) -> dict[str, Skill]:
     """Discover standalone Skills under the supplied application home."""
 
@@ -97,18 +112,80 @@ def discover_skills(
         Path(app_home) / "skills",
         source="user",
         editable=True,
+        supported_disable_sections=supported_disable_sections,
     )
 
 
-def _discover_skills_in(directory: Path, *, source: str, editable: bool) -> dict[str, Skill]:
+def _discover_skills_in(directory: Path, *, source: str, editable: bool,
+                        supported_disable_sections: frozenset[str] | None = None) -> dict[str, Skill]:
     if not directory.exists():
         return {}
 
     skills = {}
     for skill_file in sorted(directory.glob("*/SKILL.md")):
-        skill = parse_skill_file(skill_file, source=source, editable=editable)
+        skill = parse_skill_file(skill_file, source=source, editable=editable,
+                                 supported_disable_sections=supported_disable_sections)
         skills[skill.name] = skill
     return skills
+
+
+def validate_disabled_prompt_sections(disabled, overrides, path, supported=None) -> None:
+    """Validate text omission independently of tool permissions and execution.
+
+    Hosts supply their explicitly named text slots; file parsing and programmatic
+    Agent construction use this same guard so neither path bypasses the contract.
+    """
+    supported = SUPPORTED_PROMPT_SECTIONS if supported is None else supported
+    seen = set()
+    for name in disabled:
+        if not isinstance(name, str) or name not in supported:
+            if isinstance(name, str) and name in PROTECTED_PROMPT_SECTIONS:
+                raise ValueError(f"{path}: protected prompt section cannot be disabled: {name}")
+            raise ValueError(f"{path}: unknown disabled prompt section: {name}")
+        if name in PROTECTED_PROMPT_SECTIONS:
+            raise ValueError(f"{path}: protected prompt section cannot be disabled: {name}")
+        if name in seen:
+            raise ValueError(f"{path}: duplicate disabled prompt section: {name}")
+        if name in overrides:
+            raise ValueError(f"{path}: prompt section cannot be disabled and overridden: {name}")
+        seen.add(name)
+
+
+def _extract_disabled_prompt_sections(instructions: str, path: Path) -> tuple[str, tuple[str, ...]]:
+    """Remove only the exact directive and its list, leaving override parsing intact.
+
+    A following Markdown heading closes the directive. Fenced examples are ordinary
+    text, not directives. A directive inside an override closes that override too;
+    extraction leaves its heading as a boundary for the existing override parser.
+    """
+    output = []
+    disabled = []
+    active = False
+    found = False
+    fence = None
+    for number, line in enumerate(instructions.splitlines(), 1):
+        stripped = line.strip()
+        if not active and stripped.startswith(("```", "~~~")):
+            marker = stripped[0]
+            fence = None if fence == marker else (marker if fence is None else fence)
+        if fence is None and line == "## DISABLE_PROMPT_SECTIONS":
+            if found:
+                raise ValueError(f"{path}:{number}: duplicate DISABLE_PROMPT_SECTIONS directive")
+            found = active = True
+            output.append(line)
+            continue
+        if active:
+            if line.startswith("#"):
+                active = False
+            elif not stripped:
+                continue
+            elif line.startswith("- ") and len(line[2:].split()) == 1:
+                disabled.append(line[2:].strip())
+                continue
+            else:
+                raise ValueError(f"{path}:{number}: DISABLE_PROMPT_SECTIONS requires '- SECTION_NAME' entries")
+        output.append(line)
+    return "\n".join(output), tuple(disabled)
 
 
 def _split_frontmatter(text: str, path: Path) -> tuple[str, str]:
@@ -187,8 +264,20 @@ def _parse_prompt_section_overrides(
     current_section = None
     current_mode = None
     current_content = []
+    directive_fence = None
 
     for line_number, line in enumerate(lines, start=1):
+        if line.strip().startswith(("```", "~~~")):
+            marker = line.strip()[0]
+            directive_fence = None if directive_fence == marker else (marker if directive_fence is None else directive_fence)
+        if directive_fence is None and line == "## DISABLE_PROMPT_SECTIONS":
+            if current_section is not None:
+                prompt_sections[current_section] = PromptSectionOverride(
+                    current_section, current_mode, "\n".join(current_content).strip(),
+                )
+            current_section = current_mode = None
+            current_content = []
+            continue
         heading = _parse_prompt_section_heading(line, path, line_number)
         if heading is None:
             if current_section is None:
