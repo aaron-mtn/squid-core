@@ -1,6 +1,8 @@
 """Own cancellable ``run_command`` execution and failure diagnostics."""
 
 import errno
+import codecs
+import tempfile
 import os
 import re
 import signal
@@ -16,10 +18,10 @@ from ._truncation import truncate_head_tail
 
 
 TOOL_NAME = "run_command"
-DEFAULT_TIMEOUT_SECONDS = 60
+DEFAULT_TIMEOUT_SECONDS = 7200
+MAX_TIMEOUT_SECONDS = 86400
 POLL_INTERVAL_SECONDS = 0.05
 PROCESS_TREE_GRACE_SECONDS = 0.2
-PROCESS_DRAIN_TIMEOUT_SECONDS = 0.5
 PROCESS_WAIT_TIMEOUT_SECONDS = 0.2
 TASKKILL_TIMEOUT_SECONDS = 0.5
 
@@ -48,6 +50,12 @@ def tool_definition() -> dict:
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Shell command to run"},
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": MAX_TIMEOUT_SECONDS,
+                        "description": "Maximum runtime in seconds (default 7200; maximum 86400).",
+                    },
                     "verification": {
                         "type": "boolean",
                         "description": (
@@ -68,8 +76,11 @@ def execute(
     verification: bool,
     platform_context: PlatformContext | None = None,
     should_cancel: Callable[[], bool] | None = None,
+    timeout_seconds: int | None = None,
 ) -> dict:
     """Run one owned process tree and return its normalized result."""
+    if timeout_seconds is not None and (type(timeout_seconds) is not int or not 1 <= timeout_seconds <= MAX_TIMEOUT_SECONDS):
+        return {"ok": False, "tool": TOOL_NAME, "error": "timeout_seconds must be an integer between 1 and 86400"}
     platform_context = platform_context or detect_platform_context()
     should_cancel = should_cancel or (lambda: False)
     subprocess_command: str | list[str] = command
@@ -80,7 +91,11 @@ def execute(
             platform_context.shell_executable,
             "-NoProfile",
             "-Command",
-            command,
+            # PowerShell otherwise collapses a native program's nonzero exit
+            # status to 1. Preserve it while still treating shell errors as failure.
+            "$global:LASTEXITCODE = 0\n" + command +
+            "\nif (-not $?) { if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1 }",
+
         ]
         use_shell = False
         popen_options["creationflags"] = getattr(
@@ -90,30 +105,33 @@ def execute(
         # A new session gives the Tool an exact process group to terminate.
         popen_options["start_new_session"] = True
 
+    # A temporary file prevents pipe buffers and communicate() from accumulating
+    # arbitrary output in RAM. It is removed after the bounded excerpt is read.
+    output_file = tempfile.TemporaryFile()
     try:
         process = subprocess.Popen(
             subprocess_command,
             shell=use_shell,
             cwd=workspace_root,
-            stdout=subprocess.PIPE,
+            stdout=output_file,
             stderr=subprocess.STDOUT,
             **popen_options,
         )
     except OSError as exc:
+        output_file.close()
         return _launch_failure(command, verification, platform_context, exc)
 
     # A Job Object closes the Windows race between terminating PowerShell and
-    # descendants retaining its output pipe. Assignment can be unavailable in
+    # descendants surviving cancellation. Assignment can be unavailable in
     # constrained hosts, so bounded taskkill remains the fallback there.
     windows_job = (
         _create_windows_job(process) if platform_context.is_windows else None
     )
     cleanup_completed = False
     try:
-        deadline = time.monotonic() + DEFAULT_TIMEOUT_SECONDS
+        deadline = time.monotonic() + (timeout_seconds if timeout_seconds is not None else DEFAULT_TIMEOUT_SECONDS)
         cancelled = False
         timed_out = False
-        output_bytes = b""
         while True:
             if should_cancel():
                 cancelled = True
@@ -123,16 +141,14 @@ def execute(
                 timed_out = True
                 break
             try:
-                output_bytes, _ = process.communicate(
-                    timeout=min(POLL_INTERVAL_SECONDS, remaining)
-                )
+                process.wait(timeout=min(POLL_INTERVAL_SECONDS, remaining))
                 break
             except subprocess.TimeoutExpired:
                 continue
 
         if cancelled or timed_out:
             cleanup_completed = True
-            output_bytes = _cleanup_owned_process(
+            _cleanup_owned_process(
                 process,
                 platform_context.is_windows,
                 windows_job,
@@ -146,6 +162,7 @@ def execute(
             platform_context.is_windows,
             windows_job,
         )
+        output_file.close()
         raise
     finally:
         if windows_job is not None:
@@ -153,10 +170,10 @@ def execute(
             # explicitly detached process to outlive its launching shell.
             windows_job.close(kill_owned=cleanup_completed)
 
-    output = (output_bytes or b"").decode("utf-8", errors="replace")
-    # Match subprocess text mode's universal-newline behavior on every platform.
-    output = output.replace("\r\n", "\n").replace("\r", "\n")
-    output, output_metadata = truncate_head_tail(output)
+    try:
+        output, output_metadata = _read_output_excerpt(output_file)
+    finally:
+        output_file.close()
     if cancelled or timed_out:
         response = _base_response(
             command, verification, output, output_metadata, returncode=-1
@@ -193,28 +210,46 @@ def execute(
     return response
 
 
+def _read_output_excerpt(output_file) -> tuple[str, dict]:
+    """Count decoded characters while retaining only the diagnostic head and tail."""
+    # Snapshot the size so a detached writer cannot keep result delivery alive.
+    remaining = os.fstat(output_file.fileno()).st_size
+    output_file.seek(0)
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    # Incremental newline translation also handles CRLF across chunk boundaries.
+    import io
+    decoder = io.IncrementalNewlineDecoder(decoder, translate=True)
+    head = ""
+    tail = ""
+    count = 0
+    limit = 12000
+    while True:
+        chunk = output_file.read(min(65536, remaining)) if remaining else b""
+        remaining -= len(chunk)
+        text = decoder.decode(chunk, final=not chunk)
+        count += len(text)
+        if len(head) < limit:
+            head = (head + text)[:limit]
+        tail = (tail + text)[-limit:]
+        if not chunk:
+            break
+    if count <= limit:
+        return truncate_head_tail(head)
+    # Feed the shared formatter enough characters to retain its exact marker and
+    # excerpt sizes, then restore the actual count from the streaming pass.
+    excerpt, metadata = truncate_head_tail(head + tail)
+    metadata["original_chars"] = count
+    return excerpt, metadata
+
+
 def _cleanup_owned_process(
     process: subprocess.Popen,
     is_windows: bool,
     windows_job: "_WindowsJob | None" = None,
-) -> bytes:
-    """Terminate one owned tree and drain only within explicit deadlines."""
+) -> None:
+    """Terminate the owned tree and reap its leader within bounded deadlines."""
     _terminate_process_tree(process, is_windows, windows_job)
-    try:
-        output, _ = process.communicate(timeout=PROCESS_DRAIN_TIMEOUT_SECONDS)
-        return output or b""
-    except subprocess.TimeoutExpired as error:
-        # A missed or deliberately detached descendant can retain the inherited
-        # pipe after its shell is dead. Do not turn pipe EOF into an unbounded
-        # cancellation wait; close our endpoints and retain any available bytes.
-        output = error.output if isinstance(error.output, bytes) else b""
-        _close_process_pipes(process)
-        _bounded_process_wait(process)
-        return output
-    except (OSError, ValueError):
-        _close_process_pipes(process)
-        _bounded_process_wait(process)
-        return b""
+    _bounded_process_wait(process)
 
 
 def _terminate_process_tree(
@@ -304,18 +339,6 @@ def _wait_bounded(process: subprocess.Popen, timeout: float) -> None:
         process.wait(timeout=timeout)
     except (subprocess.TimeoutExpired, OSError):
         pass
-
-
-def _close_process_pipes(process: subprocess.Popen) -> None:
-    """Release parent pipe handles when descendants prevent EOF."""
-    for name in ("stdin", "stdout", "stderr"):
-        pipe = getattr(process, name, None)
-        if pipe is None:
-            continue
-        try:
-            pipe.close()
-        except OSError:
-            pass
 
 
 @dataclass

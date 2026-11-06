@@ -338,3 +338,10 @@ file's size without reading beyond the budget. When all bytes were consumed, it
 finalizes UTF-8 and releases validated matches; otherwise it reports `byte_limit`
 and withholds that incomplete file's tentative matches. Other streaming limits
 and binary detection are unchanged.
+
+
+`run_command` synchronously supervises an owned process tree, polling for host
+cancellation and its deadline. It spools combined output to temporary storage,
+then produces a bounded head/tail excerpt without loading the full log into memory.
+The default deadline is 7,200 seconds; callers may request 1?86,400 seconds.
+Cancellation and timeout are unsuccessful results and trigger best-effort tree cleanup.

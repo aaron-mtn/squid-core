@@ -558,19 +558,8 @@ def test_run_command_keeps_shared_character_truncation(
 ) -> None:
     output = "x" * 12001
 
-    class Process:
-        returncode = 0
-
-        def communicate(self, timeout=None):
-            return output.encode(), None
-
-    monkeypatch.setattr(
-        run_command_module.subprocess,
-        "Popen",
-        lambda *args, **kwargs: Process(),
-    )
-
-    result = run_command(tmp_path, "generate lots of output", verification=False)
+    executable = f"& '{sys.executable}'" if sys.platform == "win32" else shlex.quote(sys.executable)
+    result = run_command(tmp_path, f"{executable} -c \"print('x' * 12001, end='')\"", verification=False)
     expected_output, expected_metadata = truncate_head_tail(output)
 
     assert result["output"] == expected_output
@@ -992,7 +981,7 @@ def test_run_command_keyboard_interrupt_cleans_up_owned_process(
     class InterruptingProcess:
         returncode = None
 
-        def communicate(self, timeout=None):
+        def wait(self, timeout=None):
             raise KeyboardInterrupt
 
     process = InterruptingProcess()
@@ -1018,73 +1007,6 @@ def test_run_command_keyboard_interrupt_cleans_up_owned_process(
         )
 
     assert cleanups == [(process, False, None)]
-
-
-def test_run_command_cleanup_closes_retained_pipe_without_unbounded_wait(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    from squid_core.platform_context import PlatformContext
-
-    class Pipe:
-        closed = False
-
-        def close(self):
-            self.closed = True
-
-    class RetainedPipeProcess:
-        pid = 1234
-        returncode = None
-
-        def __init__(self) -> None:
-            self.stdout = Pipe()
-            self.stderr = None
-            self.stdin = None
-            self.killed = False
-            self.wait_timeouts = []
-
-        def communicate(self, timeout=None):
-            raise run_command_module.subprocess.TimeoutExpired(
-                "retained-pipe",
-                timeout,
-                output=b"partial output\n",
-            )
-
-        def poll(self):
-            return None
-
-        def kill(self):
-            self.killed = True
-
-        def wait(self, timeout=None):
-            self.wait_timeouts.append(timeout)
-            raise run_command_module.subprocess.TimeoutExpired("retained-pipe", timeout)
-
-    process = RetainedPipeProcess()
-    monkeypatch.setattr(
-        run_command_module.subprocess,
-        "Popen",
-        lambda *args, **kwargs: process,
-    )
-    monkeypatch.setattr(run_command_module, "_terminate_process_tree", lambda *args: None)
-    monkeypatch.setattr(run_command_module, "PROCESS_DRAIN_TIMEOUT_SECONDS", 0.01)
-    monkeypatch.setattr(run_command_module, "PROCESS_WAIT_TIMEOUT_SECONDS", 0.01)
-
-    started = run_command_module.time.monotonic()
-    result = run_command(
-        tmp_path,
-        "retains pipe",
-        verification=False,
-        should_cancel=lambda: True,
-        platform_context=PlatformContext("Linux", "sh", "/bin/sh", "/", False),
-    )
-
-    assert run_command_module.time.monotonic() - started < 0.5
-    assert result["cancelled"] is True
-    assert result["output"] == "partial output\n"
-    assert process.stdout.closed is True
-    assert process.killed is True
-    assert process.wait_timeouts == [0.01]
 
 
 def test_run_command_timeout_uses_bounded_cleanup_and_keeps_classification(
@@ -1315,8 +1237,8 @@ def test_run_command_uses_selected_powershell_on_windows(
     class Process:
         returncode = 0
 
-        def communicate(self, timeout=None):
-            return b"ok\n", None
+        def wait(self, timeout=None):
+            return 0
 
     monkeypatch.setattr(
         run_command_module,
@@ -1336,7 +1258,7 @@ def test_run_command_uses_selected_powershell_on_windows(
         r"C:\Program Files\PowerShell\pwsh.exe",
         "-NoProfile",
         "-Command",
-        "Get-ChildItem",
+        "$global:LASTEXITCODE = 0\nGet-ChildItem\nif (-not $?) { if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1 }",
     ]
     assert kwargs["shell"] is False
     assert kwargs["cwd"] == tmp_path
@@ -1352,8 +1274,8 @@ def test_run_command_uses_supplied_context_without_redetecting(monkeypatch, tmp_
     class Process:
         returncode = 0
 
-        def communicate(self, timeout=None):
-            return b"ok\n", None
+        def wait(self, timeout=None):
+            return 0
 
     def fail_detection():
         raise AssertionError("platform should not be redetected")
@@ -1386,3 +1308,33 @@ def test_builtin_registry_exposes_only_current_seven_names() -> None:
     ]
     assert [entry["definition"]()["function"]["name"] for entry in TOOLS.values()] == list(TOOLS)
     assert "apply_patch" not in TOOLS
+
+
+def test_run_command_long_runtime_contract_and_invalid_timeout(tmp_path: Path) -> None:
+    assert run_command_module.DEFAULT_TIMEOUT_SECONDS >= 3600
+    schema = TOOLS["run_command"]["definition"]()["function"]["parameters"]["properties"]
+    assert schema["timeout_seconds"]["maximum"] >= 3600
+    for value in (0, -1, 86401, True, 1.5):
+        assert run_command(tmp_path, "ignored", verification=False, timeout_seconds=value)["ok"] is False
+
+
+def test_run_command_periodic_large_output_and_nonzero_exit(tmp_path: Path) -> None:
+    script = tmp_path / "verbose.py"
+    script.write_text("import sys, time\nprint('START', flush=True)\nfor i in range(40):\n print('x' * 50000, flush=True)\n time.sleep(.002)\nprint('END', file=sys.stderr, flush=True)\nsys.exit(7)\n")
+    executable = f"& '{sys.executable}'" if sys.platform == "win32" else shlex.quote(sys.executable)
+    result = run_command(tmp_path, f'{executable} "{script}"', verification=True, timeout_seconds=10)
+    assert result["ok"] is False
+    assert result["returncode"] == 7
+    assert result["output_truncated"] is True
+    assert result["output_original_chars"] > 2_000_000
+    assert result["output"].startswith("START")
+    assert result["output"].endswith("END\n")
+
+
+def test_run_command_timeout_retains_periodic_output(tmp_path: Path) -> None:
+    script = tmp_path / "slow.py"
+    script.write_text("import time\nwhile True:\n print('tick', flush=True)\n time.sleep(.05)\n")
+    executable = f"& '{sys.executable}'" if sys.platform == "win32" else shlex.quote(sys.executable)
+    result = run_command(tmp_path, f'{executable} "{script}"', verification=True, timeout_seconds=1)
+    assert result["ok"] is False and result["timed_out"] is True
+    assert result["output"].count("tick") > 1

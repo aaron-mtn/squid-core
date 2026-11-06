@@ -85,10 +85,13 @@ On Windows it invokes the selected PowerShell executable with `-NoProfile
 subprocess shell, even if `PlatformContext` describes a different login shell.
 Use syntax appropriate to the executing shell.
 
-Commands have a 60-second timeout and support host cancellation, with bounded,
+Commands default to a 7,200-second timeout. The optional integer `timeout_seconds`
+selects 1 through 86,400 seconds. Commands support host cancellation, with bounded,
 best-effort process-tree cleanup. Normal completion can leave explicitly detached
-processes running. Output is decoded as UTF-8 with replacement and truncated to
-beginning/end excerpts at 12,000 characters. Success is based on process exit
+processes running. Combined output is spooled to a temporary file, decoded as UTF-8 with replacement,
+and returned as beginning/end excerpts at 12,000 characters. The temporary file
+is removed afterward; full logs are not retained and disk usage can grow with output.
+Redirect output to a workspace file if a durable complete log is needed. Success is based on process exit
 code; the tool does not independently prove that task results are correct.
 
 ## Programmatic custom tools
