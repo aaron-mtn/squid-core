@@ -1,5 +1,5 @@
 # Keep the complete public reference set in source archives, outside wheel data.
-include README.md LICENSE requirements-dev.txt
+include README.md CHANGELOG.md LICENSE requirements-dev.txt
 prune docs
 include docs/ARCHITECTURE.md docs/SKILLS.md
 recursive-include squid_core README.md

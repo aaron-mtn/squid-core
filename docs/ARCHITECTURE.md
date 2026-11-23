@@ -4,7 +4,8 @@ Source installation and package metadata
 ----------------------------------------
 
 The root `pyproject.toml` uses setuptools to package only `squid_core` and its
-subpackages. Source consumers can install the checkout normally or editably;
+subpackages. `CHANGELOG.md` records user-facing release changes and is included
+in source archives. Source consumers can install the checkout normally or editably;
 no sibling repository is needed. `README.md` supplies the package's long
 description and a standalone tool-using agent example using public collaborators
 and a stdlib OpenAI-compatible transport. The example uses the script's directory
@@ -343,5 +344,5 @@ and binary detection are unchanged.
 `run_command` synchronously supervises an owned process tree, polling for host
 cancellation and its deadline. It spools combined output to temporary storage,
 then produces a bounded head/tail excerpt without loading the full log into memory.
-The default deadline is 7,200 seconds; callers may request 1?86,400 seconds.
+The default deadline is 7,200 seconds; callers may request up to 86,400 seconds.
 Cancellation and timeout are unsuccessful results and trigger best-effort tree cleanup.

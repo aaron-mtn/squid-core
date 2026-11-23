@@ -163,8 +163,8 @@ Once it starts, you can give it a task like:
 Read hello_squid.py and tell me what this thing is doing.
 ```
 
-The agent has access to Squid Core's four built-in tools: `read_file`, `write_file`,
-`edit_file`, and `run_command`.
+The agent has access to Squid Core's seven built-in tools: `read_file`, `write_file`,
+`edit_file`, `run_command`, `list_files`, `find_files`, and `search_for_text`.
 
 ## Bring your own provider
 
@@ -192,7 +192,7 @@ Code Squid's built-in provider integrations live in `squid-providers`.
 
 ## Tools and workspaces
 
-Squid Core comes with four built-in tools:
+Squid Core comes with seven built-in tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -200,6 +200,9 @@ Squid Core comes with four built-in tools:
 | `write_file` | Creates or replaces files. |
 | `edit_file` | Makes targeted edits to existing files. |
 | `run_command` | Runs local shell commands. |
+| `list_files` | Lists entries in one directory. |
+| `find_files` | Finds files by filename through bounded recursive search. |
+| `search_for_text` | Finds literal text through bounded recursive search. |
 
 These are available through `squid_core.tools.TOOLS`. You can use the built-in
 set, replace it with your own tools, or add custom tools alongside them.
